@@ -75,9 +75,42 @@ describe("configuration et URL", () => {
   it("lit l'environnement, vide = pas de filtre", () => {
     expect(critereDepuisEnv({ VACANCES_ZONE: " Zone B ", VACANCES_ACADEMIE: "" })).toEqual({ zone: "Zone B", academie: undefined, anneeScolaire: undefined });
   });
-  it("échappe les guillemets dans la clause where", () => {
-    const u = new URL(construireUrl({ academie: 'Li"on', zone: "Zone A" }, 100, "https://exemple.invalide/r"));
-    expect(u.searchParams.get("where")).toBe('zones="Zone A" and location="Li""on"');
+  it("construit la clause where et le décalage", () => {
+    const u = new URL(construireUrl({ academie: "Lyon", zone: "Zone A" }, 100, "https://exemple.invalide/r"));
+    expect(u.searchParams.get("where")).toBe('zones="Zone A" and location="Lyon"');
     expect(u.searchParams.get("offset")).toBe("100");
+  });
+  it("rejette guillemet et antislash dans les filtres", () => {
+    for (const v of ['Li"on', "Ly\\on"]) {
+      expect(() => construireUrl({ academie: v }, 0, "https://exemple.invalide/r")).toThrow(ErreurVacances);
+    }
+  });
+  it("le client HTTP propage le rejet de configuration sans appeler le réseau", async () => {
+    const f = vi.fn();
+    await expect(new ClientVacancesHttp(f as never, "https://exemple.invalide/r").recuperer({ zone: 'A"' })).rejects.toThrow(/Configuration/);
+    expect(f).not.toHaveBeenCalled();
+  });
+});
+
+describe("pagination du client HTTP (fetch simulé)", () => {
+  const base = "https://exemple.invalide/r";
+  const page = (n: number, total?: number) => ({ ok: true, json: async () => ({ results: Array.from({ length: n }, () => ({})), total_count: total }) });
+  const decalages = (f: ReturnType<typeof vi.fn>) => f.mock.calls.map((c) => new URL(c[0] as string).searchParams.get("offset"));
+
+  it("enchaîne les pages et s'arrête sur une page incomplète", async () => {
+    const f = vi.fn().mockResolvedValueOnce(page(100)).mockResolvedValueOnce(page(100)).mockResolvedValueOnce(page(30));
+    expect(await new ClientVacancesHttp(f as never, base).recuperer({})).toHaveLength(230);
+    expect(decalages(f)).toEqual(["0", "100", "200"]);
+  });
+  it("s'arrête dès que total_count est atteint", async () => {
+    const f = vi.fn().mockResolvedValueOnce(page(100, 200)).mockResolvedValueOnce(page(100, 200));
+    expect(await new ClientVacancesHttp(f as never, base).recuperer({})).toHaveLength(200);
+    expect(f).toHaveBeenCalledTimes(2);
+  });
+  it("lève une erreur si la limite de pages est atteinte avec des résultats restants", async () => {
+    const f = vi.fn().mockResolvedValue(page(100, 5000));
+    await expect(new ClientVacancesHttp(f as never, base).recuperer({})).rejects.toThrow(/tronqués/);
+    expect(f).toHaveBeenCalledTimes(20);
+    expect(Math.max(...decalages(f).map(Number)) + 100).toBeLessThanOrEqual(10_000);
   });
 });

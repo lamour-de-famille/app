@@ -4,10 +4,15 @@ export const URL_VACANCES =
   "https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-calendrier-scolaire/records";
 const PAGE = 100;
 const PAGES_MAX = 20;
+/** Contrainte de l'API Explore : offset + limit <= 10000. */
+const OFFSET_LIMITE_MAX = 10_000;
 
-/** Échappe une valeur pour la clause where ODSQL (guillemets doublés). */
+/** Entoure une valeur de guillemets pour ODSQL ; rejette `"` et `\` plutôt que de supposer leur échappement. */
 function litteral(v: string): string {
-  return `"${v.replace(/"/g, '""')}"`;
+  if (/["\\]/.test(v)) {
+    throw new ErreurVacances('Configuration des vacances invalide : les caractères " et \\ sont interdits dans les filtres');
+  }
+  return `"${v}"`;
 }
 
 export function construireUrl(critere: CritereVacances, decalage = 0, base = URL_VACANCES): string {
@@ -31,7 +36,11 @@ export class ClientVacancesHttp implements ClientVacances {
     const tous: EnregistrementBrut[] = [];
     try {
       for (let page = 0; page < PAGES_MAX; page++) {
-        const rep = await this.appelFetch(construireUrl(critere, page * PAGE, this.base), {
+        const decalage = page * PAGE;
+        if (decalage + PAGE > OFFSET_LIMITE_MAX) {
+          throw new ErreurVacances("Résultats des vacances trop nombreux : ajouter un filtre (année scolaire)");
+        }
+        const rep = await this.appelFetch(construireUrl(critere, decalage, this.base), {
           headers: { Accept: "application/json" },
           signal: AbortSignal.timeout(10_000),
         });
@@ -41,8 +50,12 @@ export class ClientVacancesHttp implements ClientVacances {
         if (!Array.isArray(results)) throw new ErreurVacances("Réponse des vacances inattendue");
         tous.push(...(results as EnregistrementBrut[]));
         if (results.length < PAGE) return tous;
+        const total = (corps as { total_count?: unknown }).total_count;
+        if (typeof total === "number" && tous.length >= total) return tous;
       }
-      return tous;
+      throw new ErreurVacances(
+        `Résultats des vacances tronqués (limite de ${PAGES_MAX} pages atteinte) : ajouter un filtre (année scolaire)`,
+      );
     } catch (e) {
       if (e instanceof ErreurVacances) throw e;
       throw new ErreurVacances("Service des vacances injoignable", { cause: e });
