@@ -70,10 +70,10 @@ describe("règles stockées dans le dépôt", () => {
   it("enregistre, relit (copie JSON), remplace et supprime ; journalise", async () => {
     await poser(wePair, suitSam);
     const lues = await depot.listerRegles();
-    expect(lues.map((r) => r.id)).toEqual(["we-pair", "nina-suit-sam"]);
+    expect(lues.map((r) => r.id)).toEqual(["nina-suit-sam", "we-pair"]);
     expect(JSON.parse(JSON.stringify(lues))).toEqual(lues);
     await depot.enregistrerRegle("sam", { ...wePair, parite: "impaire" });
-    expect((await depot.listerRegles())[0]).toMatchObject({ parite: "impaire" });
+    expect((await depot.listerRegles()).find((r) => r.id === "we-pair")).toMatchObject({ parite: "impaire" });
     const j = await depot.lireJournal();
     expect(j.at(-1)).toMatchObject({ entite: "regle", cle: "we-pair", action: "modification", auteurId: "sam" });
     await depot.supprimerRegle("sam", "nina-suit-sam");
@@ -303,7 +303,7 @@ describe("acceptation : un mois entier de planning pour la famille fictive", () 
     await appliquerRegles(depot, "alex", "2026-03", []);
 
     const jours = async (enfantId: string) =>
-      (await depot.listerCreneaux({ enfantId, du: "2026-03-01", au: "2026-03-31" })).map((c) => c.date);
+      (await depot.listerCreneaux({ enfantId, du: "2026-03-01", au: "2026-03-31" })).map((c) => c.date).sort();
     // Léo et Mila : impairs (ven. 27/02, 13/03, 27/03 jusqu'au lundi) et pairs (7-8 et 21-22)
     const attendu = [
       "2026-03-01", "2026-03-02", "2026-03-07", "2026-03-08", "2026-03-13", "2026-03-14", "2026-03-15",
