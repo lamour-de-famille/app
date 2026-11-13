@@ -44,15 +44,38 @@ function validerFamille(f: Famille) {
 export interface OptionsDepotMemoire {
   /** Horloge injectable (tests). */
   maintenant?: () => Date;
+  /** Générateur d'ids injectable (ex. ids uniques et triables pour un stockage partagé). */
+  genererId?: (prefixe: string) => string;
 }
 
+/** Collections de l'état d'un dépôt ; les clés sont celles des documents (« enfant|date » ou id). */
+export interface EtatDepot {
+  gardes: Record<string, Garde>;
+  presences: Record<string, Presence>;
+  transferts: Record<string, Transfert>;
+  creneaux: Record<string, Creneau>;
+  demandes: Record<string, DemandeEchange>;
+  regles: Record<string, Regle>;
+  journal: Record<string, EntreeJournal>;
+  evenements: Record<string, EvenementANotifier>;
+}
+export type NomCollection = keyof EtatDepot;
+
 const copie = <T>(v: T): T => structuredClone(v);
+/**
+ * Valeurs d'une collection triées par clé (id, ou « enfant|date »), en comparant les unités de code :
+ * même ordre que Firestore et indépendant de l'ordre d'insertion. Le journal et les événements restent,
+ * eux, dans l'ordre chronologique.
+ */
+const parCle = <T>(m: Map<string, T>): T[] =>
+  [...m].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, v]) => v);
 const dansPeriode = (date: string, f?: FiltrePeriode) =>
   (!f?.du || date >= f.du) && (!f?.au || date <= f.au);
 
 export class DepotMemoire implements DepotFamille {
   private readonly famille: Famille;
   private readonly maintenant: () => Date;
+  private readonly genererId?: (prefixe: string) => string;
   private compteur = 0;
   private gardes = new Map<string, Garde>();
   private presences = new Map<string, Presence>();
@@ -70,6 +93,40 @@ export class DepotMemoire implements DepotFamille {
     validerFamille(famille);
     this.famille = copie(famille);
     this.maintenant = options.maintenant ?? (() => new Date());
+    this.genererId = options.genererId;
+  }
+
+  /** Copie de l'état courant, par collection (sert aux adaptateurs de stockage). */
+  exporterEtat(): EtatDepot {
+    const obj = <T>(m: Map<string, T>) => Object.fromEntries([...m].map(([k, v]) => [k, copie(v)]));
+    const parId = <T extends { id: string }>(l: T[]) => Object.fromEntries(l.map((v) => [v.id, copie(v)]));
+    return {
+      gardes: obj(this.gardes),
+      presences: obj(this.presences),
+      transferts: obj(this.transferts),
+      creneaux: obj(this.creneaux),
+      demandes: obj(this.demandes),
+      regles: obj(this.regles),
+      journal: parId(this.journal),
+      evenements: parId(this.evenements),
+    };
+  }
+
+  /**
+   * Remplace l'état. L'ordre du journal et des événements suit celui de l'objet : leurs ids (« jn-… »,
+   * « ev-… », jamais entiers) doivent donc être triables dans l'ordre chronologique, car `Object.entries`
+   * placerait en tête des clés entières.
+   */
+  restaurerEtat(etat: Partial<EtatDepot>) {
+    const map = <T>(o: Record<string, T> | undefined) => new Map(Object.entries(copie(o ?? {})));
+    this.gardes = map(etat.gardes);
+    this.presences = map(etat.presences);
+    this.transferts = map(etat.transferts);
+    this.creneaux = map(etat.creneaux);
+    this.demandes = map(etat.demandes);
+    this.regles = map(etat.regles);
+    this.journal = Object.values(copie(etat.journal ?? {}));
+    this.evenements = Object.values(copie(etat.evenements ?? {}));
   }
 
   async lireFamille() {
@@ -77,7 +134,7 @@ export class DepotMemoire implements DepotFamille {
   }
 
   async listerGardes(f?: FiltrePeriode) {
-    return [...this.gardes.values()]
+    return parCle(this.gardes)
       .filter((g) => (!f?.enfantId || g.enfantId === f.enfantId) && dansPeriode(g.date, f))
       .map(copie);
   }
@@ -101,7 +158,7 @@ export class DepotMemoire implements DepotFamille {
   }
 
   async listerPresences(f?: FiltrePeriode) {
-    return [...this.presences.values()]
+    return parCle(this.presences)
       .filter((p) => (!f?.enfantId || p.enfantId === f.enfantId) && dansPeriode(p.date, f))
       .map(copie);
   }
@@ -115,7 +172,7 @@ export class DepotMemoire implements DepotFamille {
   }
 
   async listerTransferts(f?: Omit<FiltrePeriode, "enfantId">) {
-    return [...this.transferts.values()].filter((t) => dansPeriode(t.date, f)).map(copie);
+    return parCle(this.transferts).filter((t) => dansPeriode(t.date, f)).map(copie);
   }
 
   async enregistrerTransfert(auteurId: string, t: Omit<Transfert, "id"> & { id?: string }) {
@@ -138,7 +195,7 @@ export class DepotMemoire implements DepotFamille {
   }
 
   async listerCreneaux(f?: FiltrePeriode) {
-    return [...this.creneaux.values()]
+    return parCle(this.creneaux)
       .filter((c) => (!f?.enfantId || c.enfantId === f.enfantId) && dansPeriode(c.date, f))
       .map(copie);
   }
@@ -160,7 +217,7 @@ export class DepotMemoire implements DepotFamille {
   }
 
   async listerDemandes() {
-    return [...this.demandes.values()].map(copie);
+    return parCle(this.demandes).map(copie);
   }
 
   async proposerEchange(auteurId: string, d: NouvelleDemande) {
@@ -216,7 +273,7 @@ export class DepotMemoire implements DepotFamille {
   }
 
   async listerRegles() {
-    return [...this.regles.values()].map(copie);
+    return parCle(this.regles).map(copie);
   }
 
   async enregistrerRegle(auteurId: string, regle: Regle) {
@@ -245,7 +302,7 @@ export class DepotMemoire implements DepotFamille {
   }
 
   private dependantesDe(id: string) {
-    return [...this.regles.values()].filter((r) => r.type === "derivee" && r.sourceId === id);
+    return parCle(this.regles).filter((r) => r.type === "derivee" && r.sourceId === id);
   }
 
   async lireJournal() {
@@ -271,7 +328,7 @@ export class DepotMemoire implements DepotFamille {
   /** Génère un id ; si `magasin` est fourni, saute les ids déjà pris (fournis par l'appelant). */
   private nouvelId(prefixe: string, magasin?: Map<string, unknown>) {
     let id: string;
-    do id = `${prefixe}-${++this.compteur}`;
+    do id = this.genererId ? this.genererId(prefixe) : `${prefixe}-${++this.compteur}`;
     while (magasin?.has(id));
     return id;
   }
