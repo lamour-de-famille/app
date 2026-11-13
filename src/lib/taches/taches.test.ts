@@ -51,9 +51,9 @@ describe("validation à l'écriture", () => {
   const base = { titre: "Rendez-vous", assigneId: "sam" };
   it("refuse assigné, enfant, auteur inconnus", async () => {
     const d = nouveau();
-    await expect(d.enregistrer("alex", { ...base, assigneId: "zoe" })).rejects.toThrow(/assigné/);
-    await expect(d.enregistrer("alex", { ...base, enfantId: "zoe" })).rejects.toThrow(/Enfant/);
-    await expect(d.enregistrer("zoe", base)).rejects.toThrow(/Auteur/);
+    await expect(d.enregistrer("alex", { ...base, assigneId: "inconnu" })).rejects.toThrow(/assigné/);
+    await expect(d.enregistrer("alex", { ...base, enfantId: "inconnu" })).rejects.toThrow(/Enfant/);
+    await expect(d.enregistrer("inconnu", base)).rejects.toThrow(/Auteur/);
     expect(await d.lister()).toEqual([]);
   });
   it("refuse dates et récurrences invalides", async () => {
@@ -201,7 +201,7 @@ describe("vues par adulte", () => {
     await d.enregistrer("alex", { titre: "q", assigneId: "alex", echeance: "2026-11-01", recurrence: { frequence: "quotidienne", intervalle: 1 } });
     const v = await tachesPourAdulte(d, famille, "alex", AUJ, { joursRattrapage: 3 });
     expect(v.aRattraper.map((o) => o.date)).toEqual(["2026-11-08", "2026-11-09", "2026-11-10"]);
-    await expect(tachesPourAdulte(d, famille, "zoe", AUJ)).rejects.toThrow(/inconnu/);
+    await expect(tachesPourAdulte(d, famille, "inconnu", AUJ)).rejects.toThrow(/inconnu/);
   });
 });
 
