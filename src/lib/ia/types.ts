@@ -1,7 +1,9 @@
 /** Contrats du client Gemini (seul fournisseur d'IA). */
+import type { Famille } from "../domaine/types";
 
 export interface UsageIA {
   jetonsEntree: number;
+  /** Jetons de sortie, réflexion comprise (facturés au tarif de sortie). */
   jetonsSortie: number;
 }
 
@@ -39,8 +41,8 @@ export interface SortieDictee {
 
 export interface DemandeDictee {
   audio: { octets: Uint8Array; mimeType: string };
-  /** Contexte familial lu en base par l'appelant (jamais écrit dans le code). */
-  contexteFamilial: string;
+  /** Famille lue en base par l'appelant : le client en tire le contexte et vérifie les identifiants de la sortie. */
+  famille: Famille;
   maintenant: Date;
   adulteId: string;
 }
@@ -50,9 +52,14 @@ export interface DemandeRedaction {
   contexte: string;
 }
 
+/** `usage` absent : le fournisseur ne l'a pas indiqué, l'estimation réservée est conservée. */
 export interface ClientGemini {
-  /** Un seul appel : transcription, correction, rangement et rédaction. */
-  traiterDictee(demande: DemandeDictee): Promise<{ resultat: SortieDictee; usage: UsageIA }>;
+  /**
+   * Un seul appel : transcription, correction, rangement et rédaction.
+   * La sortie rendue est toujours validée et vérifiée contre les identifiants de la famille ;
+   * sinon lève SortieDicteeInvalide (réponse reçue donc facturée : l'erreur porte l'usage).
+   */
+  traiterDictee(demande: DemandeDictee): Promise<{ resultat: SortieDictee; usage?: UsageIA }>;
   /** Texte court (notifications). */
-  rediger(demande: DemandeRedaction): Promise<{ texte: string; usage: UsageIA }>;
+  rediger(demande: DemandeRedaction): Promise<{ texte: string; usage?: UsageIA }>;
 }

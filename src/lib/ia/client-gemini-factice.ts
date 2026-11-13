@@ -1,8 +1,10 @@
+import { SortieDicteeInvalide, verifierIdentifiants } from "./sortie-dictee";
 import type { ClientGemini, DemandeDictee, DemandeRedaction, SortieDictee, UsageIA } from "./types";
 
 export interface OptionsFactice {
   sortie?: SortieDictee;
-  usage?: UsageIA;
+  /** Usage rendu ; null : usage non indiqué par le fournisseur. */
+  usage?: UsageIA | null;
   /** Si défini, les appels échouent avec cette erreur. */
   erreur?: Error;
 }
@@ -15,14 +17,23 @@ export class ClientGeminiFactice implements ClientGemini {
   readonly appelsRedaction: DemandeRedaction[] = [];
   constructor(private readonly options: OptionsFactice = {}) {}
 
-  private usage(): UsageIA {
+  private usage(): UsageIA | undefined {
+    if (this.options.usage === null) return undefined;
     return this.options.usage ?? { jetonsEntree: 100, jetonsSortie: 50 };
   }
 
   async traiterDictee(demande: DemandeDictee) {
     this.appelsDictee.push(demande);
     if (this.options.erreur) throw this.options.erreur;
-    return { resultat: structuredClone(this.options.sortie ?? SORTIE_PAR_DEFAUT), usage: this.usage() };
+    const resultat = structuredClone(this.options.sortie ?? SORTIE_PAR_DEFAUT);
+    try {
+      verifierIdentifiants(resultat, demande.famille);
+    } catch (e) {
+      // Comme le client réel : la réponse a été reçue, donc facturée.
+      if (e instanceof SortieDicteeInvalide) throw new SortieDicteeInvalide(e.problemes, this.usage());
+      throw e;
+    }
+    return { resultat, usage: this.usage() };
   }
 
   async rediger(demande: DemandeRedaction) {

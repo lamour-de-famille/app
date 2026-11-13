@@ -1,11 +1,22 @@
 import { describe, expect, it } from "vitest";
+import { familleFictive } from "../domaine/fixture-famille";
 import { ClientGeminiFactice } from "./client-gemini-factice";
 import { configurationIADepuisEnv, MODELE_PAR_DEFAUT, SEUILS_PAR_DEFAUT } from "./configuration";
 import { clesPeriode, ClientGeminiPlafonne, PlafondAtteint, PlafondIA, StockageUsageIAMemoire } from "./plafond";
+import { SortieDicteeInvalide } from "./sortie-dictee";
 import type { DemandeDictee } from "./types";
 
-const grand = { maxRequetesJour: 1000, maxJetonsJour: 1e9, maxRequetesMois: 1000, maxJetonsMois: 1e9, jetonsReservesParAppel: 100 };
-const demande = (): DemandeDictee => ({ audio: { octets: new Uint8Array([1]), mimeType: "audio/webm" }, contexteFamilial: "ctx", maintenant: new Date(), adulteId: "alex" });
+const grand = {
+  maxRequetesJour: 1000,
+  maxJetonsEntreeJour: 1e9,
+  maxJetonsSortieJour: 1e9,
+  maxRequetesMois: 1000,
+  maxJetonsEntreeMois: 1e9,
+  maxJetonsSortieMois: 1e9,
+  jetonsEntreeReservesParAppel: 60,
+  jetonsSortieReservesParAppel: 40,
+};
+const demande = (): DemandeDictee => ({ audio: { octets: new Uint8Array([1]), mimeType: "audio/webm" }, famille: familleFictive, maintenant: new Date(), adulteId: "alex" });
 
 function monter(seuils: Partial<typeof grand>, horloge: { t: Date }, factice = new ClientGeminiFactice()) {
   const stockage = new StockageUsageIAMemoire();
@@ -16,11 +27,11 @@ function monter(seuils: Partial<typeof grand>, horloge: { t: Date }, factice = n
 describe("configuration", () => {
   it("défauts et surcharges", () => {
     expect(configurationIADepuisEnv({})).toEqual({ modele: MODELE_PAR_DEFAUT, seuils: SEUILS_PAR_DEFAUT });
-    const c = configurationIADepuisEnv({ GEMINI_MODEL: " m-test ", IA_MAX_REQUETES_JOUR: "3", IA_MAX_JETONS_MOIS: "abc", IA_MAX_JETONS_JOUR: "-5" });
+    const c = configurationIADepuisEnv({ GEMINI_MODEL: " m-test ", IA_MAX_REQUETES_JOUR: "3", IA_MAX_JETONS_SORTIE_MOIS: "abc", IA_MAX_JETONS_ENTREE_JOUR: "-5" });
     expect(c.modele).toBe("m-test");
     expect(c.seuils.maxRequetesJour).toBe(3);
-    expect(c.seuils.maxJetonsMois).toBe(SEUILS_PAR_DEFAUT.maxJetonsMois);
-    expect(c.seuils.maxJetonsJour).toBe(SEUILS_PAR_DEFAUT.maxJetonsJour);
+    expect(c.seuils.maxJetonsSortieMois).toBe(SEUILS_PAR_DEFAUT.maxJetonsSortieMois);
+    expect(c.seuils.maxJetonsEntreeJour).toBe(SEUILS_PAR_DEFAUT.maxJetonsEntreeJour);
   });
 });
 
@@ -86,18 +97,18 @@ describe("plafond de jetons", () => {
     const f = new ClientGeminiFactice({ usage: { jetonsEntree: 30, jetonsSortie: 20 } });
     const { client, stockage } = monter({}, h, f);
     await client.rediger({ consigne: "a", contexte: "b" });
-    expect(await stockage.lire("jour:2026-11-14")).toEqual({ requetes: 1, jetons: 50 });
-    expect(await stockage.lire("mois:2026-11")).toEqual({ requetes: 1, jetons: 50 });
+    expect(await stockage.lire("jour:2026-11-14")).toEqual({ requetes: 1, jetonsEntree: 30, jetonsSortie: 20 });
+    expect(await stockage.lire("mois:2026-11")).toEqual({ requetes: 1, jetonsEntree: 30, jetonsSortie: 20 });
   });
 
   it("refuse quand l'estimation ferait dépasser le seuil, accepte pile à la limite", async () => {
     const h = { t: new Date("2026-11-14T10:00:00Z") };
     const f = new ClientGeminiFactice({ usage: { jetonsEntree: 60, jetonsSortie: 40 } });
-    const { client, stockage } = monter({ maxJetonsJour: 200 }, h, f);
+    const { client, stockage } = monter({ maxJetonsEntreeJour: 120 }, h, f);
     await client.rediger({ consigne: "a", contexte: "b" }); // 100 utilisés
     await client.rediger({ consigne: "a", contexte: "b" }); // 200 : pile la limite
     await expect(client.rediger({ consigne: "a", contexte: "b" })).rejects.toBeInstanceOf(PlafondAtteint);
-    expect((await stockage.lire("jour:2026-11-14")).jetons).toBe(200);
+    expect((await stockage.lire("jour:2026-11-14")).jetonsEntree).toBe(120);
     expect(f.appelsRedaction).toHaveLength(2);
   });
 
@@ -105,6 +116,42 @@ describe("plafond de jetons", () => {
     const h = { t: new Date("2026-11-14T10:00:00Z") };
     const { client, stockage } = monter({ maxRequetesJour: 1 }, h, new ClientGeminiFactice({ erreur: new Error("réseau") }));
     await expect(client.traiterDictee(demande())).rejects.toThrow("réseau");
-    expect(await stockage.lire("jour:2026-11-14")).toEqual({ requetes: 0, jetons: 0 });
+    expect(await stockage.lire("jour:2026-11-14")).toEqual({ requetes: 0, jetonsEntree: 0, jetonsSortie: 0 });
+  });
+  it("sépare les seuils : la sortie (réflexion comprise) peut bloquer seule", async () => {
+    const h = { t: new Date("2026-11-14T10:00:00Z") };
+    const f = new ClientGeminiFactice({ usage: { jetonsEntree: 10, jetonsSortie: 90 } });
+    const { client } = monter({ maxJetonsSortieJour: 100 }, h, f);
+    await client.rediger({ consigne: "a", contexte: "b" });
+    const e = await client.rediger({ consigne: "a", contexte: "b" }).catch((x) => x);
+    expect(e).toBeInstanceOf(PlafondAtteint);
+    expect(f.appelsRedaction).toHaveLength(1);
+  });
+
+  it("garde l'estimation réservée si l'usage est inconnu", async () => {
+    const h = { t: new Date("2026-11-14T10:00:00Z") };
+    const { client, stockage } = monter({}, h, new ClientGeminiFactice({ usage: null }));
+    await client.rediger({ consigne: "a", contexte: "b" });
+    expect(await stockage.lire("jour:2026-11-14")).toEqual({ requetes: 1, jetonsEntree: 60, jetonsSortie: 40 });
+  });
+});
+
+describe("réponse reçue mais invalide", () => {
+  const mauvaise = { transcription: "t", taches: [], rendezVous: [], notes: [{ texte: "x", enfantId: "inconnu" }] };
+
+  it("compte la requête et l'usage réel (appel facturé)", async () => {
+    const h = { t: new Date("2026-11-14T10:00:00Z") };
+    const f = new ClientGeminiFactice({ sortie: mauvaise, usage: { jetonsEntree: 30, jetonsSortie: 20 } });
+    const { client, stockage } = monter({}, h, f);
+    await expect(client.traiterDictee(demande())).rejects.toBeInstanceOf(SortieDicteeInvalide);
+    expect(await stockage.lire("jour:2026-11-14")).toEqual({ requetes: 1, jetonsEntree: 30, jetonsSortie: 20 });
+    expect(await stockage.lire("mois:2026-11")).toEqual({ requetes: 1, jetonsEntree: 30, jetonsSortie: 20 });
+  });
+
+  it("garde l'estimation si l'usage est inconnu", async () => {
+    const h = { t: new Date("2026-11-14T10:00:00Z") };
+    const { client, stockage } = monter({}, h, new ClientGeminiFactice({ sortie: mauvaise, usage: null }));
+    await expect(client.traiterDictee(demande())).rejects.toBeInstanceOf(SortieDicteeInvalide);
+    expect(await stockage.lire("jour:2026-11-14")).toEqual({ requetes: 1, jetonsEntree: 60, jetonsSortie: 40 });
   });
 });

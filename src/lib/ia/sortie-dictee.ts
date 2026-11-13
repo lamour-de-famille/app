@@ -1,8 +1,15 @@
 import type { Famille } from "../domaine/types";
-import type { NoteDictee, Recurrence, RendezVousDictee, SortieDictee, TacheDictee } from "./types";
+import type { NoteDictee, Recurrence, RendezVousDictee, SortieDictee, TacheDictee, UsageIA } from "./types";
 
+/**
+ * Sortie refusée. Levée aussi par un client après réception de la réponse : `usage` (si connu)
+ * est alors celui de l'appel déjà facturé, que le plafond doit compter.
+ */
 export class SortieDicteeInvalide extends Error {
-  constructor(public readonly problemes: string[]) {
+  constructor(
+    public readonly problemes: string[],
+    public readonly usage?: UsageIA,
+  ) {
     super(`Sortie de dictée invalide : ${problemes.join(" ; ")}`);
     this.name = "SortieDicteeInvalide";
   }
@@ -170,7 +177,7 @@ export function verifierIdentifiants(sortie: SortieDictee, famille: Famille): vo
   if (p.length > 0) throw new SortieDicteeInvalide(p);
 }
 
-/** Analyse, valide et vérifie : seule sortie utilisable pour écrire. Lève SortieDicteeInvalide sinon. */
+/** Analyse, valide et vérifie un texte brut ; lève SortieDicteeInvalide sinon. Appelée par les clients Gemini. */
 export function sortieDicteeSure(brut: string, famille: Famille): SortieDictee {
   const s = analyserSortieDictee(brut);
   verifierIdentifiants(s, famille);

@@ -1,29 +1,35 @@
 import type { SeuilsIA } from "./configuration";
+import { SortieDicteeInvalide } from "./sortie-dictee";
 import type { ClientGemini, DemandeDictee, DemandeRedaction, UsageIA } from "./types";
 
 const FUSEAU = "Europe/Paris";
 
 export interface Compteur {
   requetes: number;
-  jetons: number;
+  jetonsEntree: number;
+  /** Jetons de sortie, réflexion comprise. */
+  jetonsSortie: number;
 }
+
+const ZERO: Compteur = { requetes: 0, jetonsEntree: 0, jetonsSortie: 0 };
 
 /** Stockage des compteurs, clés de période comme « jour:2026-11-14 » ou « mois:2026-11 ». */
 export interface StockageUsageIA {
   lire(cle: string): Promise<Compteur>;
   /** Ajoute (ou retranche, si négatif) et renvoie le nouveau total, de façon atomique. */
-  ajouter(cle: string, requetes: number, jetons: number): Promise<Compteur>;
+  ajouter(cle: string, delta: Compteur): Promise<Compteur>;
 }
 
 export class StockageUsageIAMemoire implements StockageUsageIA {
   private readonly donnees = new Map<string, Compteur>();
   async lire(cle: string) {
-    return { ...(this.donnees.get(cle) ?? { requetes: 0, jetons: 0 }) };
+    return { ...(this.donnees.get(cle) ?? ZERO) };
   }
-  async ajouter(cle: string, requetes: number, jetons: number) {
-    const c = this.donnees.get(cle) ?? { requetes: 0, jetons: 0 };
-    c.requetes += requetes;
-    c.jetons += jetons;
+  async ajouter(cle: string, delta: Compteur) {
+    const c = { ...(this.donnees.get(cle) ?? ZERO) };
+    c.requetes += delta.requetes;
+    c.jetonsEntree += delta.jetonsEntree;
+    c.jetonsSortie += delta.jetonsSortie;
     this.donnees.set(cle, c);
     return { ...c };
   }
@@ -50,8 +56,11 @@ export function clesPeriode(maintenant: Date): { jour: string; mois: string } {
 
 export interface Reservation {
   readonly cles: { jour: string; mois: string };
-  readonly jetonsReserves: number;
+  readonly jetonsEntreeReserves: number;
+  readonly jetonsSortieReserves: number;
 }
+
+const oppose = (c: Compteur): Compteur => ({ requetes: -c.requetes, jetonsEntree: -c.jetonsEntree, jetonsSortie: -c.jetonsSortie });
 
 export class PlafondIA {
   constructor(
@@ -63,32 +72,35 @@ export class PlafondIA {
   /** Réserve une requête et une estimation de jetons ; refuse sans rien consommer si un seuil serait dépassé. */
   async reserver(): Promise<Reservation> {
     const cles = clesPeriode(this.maintenant());
-    const j = this.seuils.jetonsReservesParAppel;
-    const jour = await this.stockage.ajouter(cles.jour, 1, j);
-    if (jour.requetes > this.seuils.maxRequetesJour || jour.jetons > this.seuils.maxJetonsJour) {
-      await this.stockage.ajouter(cles.jour, -1, -j);
+    const s = this.seuils;
+    const delta: Compteur = { requetes: 1, jetonsEntree: s.jetonsEntreeReservesParAppel, jetonsSortie: s.jetonsSortieReservesParAppel };
+    const jour = await this.stockage.ajouter(cles.jour, delta);
+    if (jour.requetes > s.maxRequetesJour || jour.jetonsEntree > s.maxJetonsEntreeJour || jour.jetonsSortie > s.maxJetonsSortieJour) {
+      await this.stockage.ajouter(cles.jour, oppose(delta));
       throw new PlafondAtteint("jour");
     }
-    const mois = await this.stockage.ajouter(cles.mois, 1, j);
-    if (mois.requetes > this.seuils.maxRequetesMois || mois.jetons > this.seuils.maxJetonsMois) {
-      await this.stockage.ajouter(cles.mois, -1, -j);
-      await this.stockage.ajouter(cles.jour, -1, -j);
+    const mois = await this.stockage.ajouter(cles.mois, delta);
+    if (mois.requetes > s.maxRequetesMois || mois.jetonsEntree > s.maxJetonsEntreeMois || mois.jetonsSortie > s.maxJetonsSortieMois) {
+      await this.stockage.ajouter(cles.mois, oppose(delta));
+      await this.stockage.ajouter(cles.jour, oppose(delta));
       throw new PlafondAtteint("mois");
     }
-    return { cles, jetonsReserves: j };
+    return { cles, jetonsEntreeReserves: s.jetonsEntreeReservesParAppel, jetonsSortieReserves: s.jetonsSortieReservesParAppel };
   }
 
-  /** Remplace l'estimation par l'usage réel. */
-  async enregistrer(r: Reservation, usage: UsageIA): Promise<void> {
-    const delta = usage.jetonsEntree + usage.jetonsSortie - r.jetonsReserves;
-    await this.stockage.ajouter(r.cles.jour, 0, delta);
-    await this.stockage.ajouter(r.cles.mois, 0, delta);
+  /** Remplace l'estimation par l'usage réel ; usage inconnu : l'estimation réservée est conservée. */
+  async enregistrer(r: Reservation, usage: UsageIA | undefined): Promise<void> {
+    if (!usage) return;
+    const delta: Compteur = { requetes: 0, jetonsEntree: usage.jetonsEntree - r.jetonsEntreeReserves, jetonsSortie: usage.jetonsSortie - r.jetonsSortieReserves };
+    await this.stockage.ajouter(r.cles.jour, delta);
+    await this.stockage.ajouter(r.cles.mois, delta);
   }
 
-  /** Appel échoué : rend la réservation (rien n'a été facturé). */
+  /** Appel échoué avant toute facturation (réseau, refus HTTP) : rend la réservation. */
   async annuler(r: Reservation): Promise<void> {
-    await this.stockage.ajouter(r.cles.jour, -1, -r.jetonsReserves);
-    await this.stockage.ajouter(r.cles.mois, -1, -r.jetonsReserves);
+    const delta: Compteur = { requetes: -1, jetonsEntree: -r.jetonsEntreeReserves, jetonsSortie: -r.jetonsSortieReserves };
+    await this.stockage.ajouter(r.cles.jour, delta);
+    await this.stockage.ajouter(r.cles.mois, delta);
   }
 }
 
@@ -99,13 +111,18 @@ export class ClientGeminiPlafonne implements ClientGemini {
     private readonly plafond: PlafondIA,
   ) {}
 
-  private async proteger<T extends { usage: UsageIA }>(appel: () => Promise<T>): Promise<T> {
+  private async proteger<T extends { usage?: UsageIA }>(appel: () => Promise<T>): Promise<T> {
     const r = await this.plafond.reserver();
     let res: T;
     try {
       res = await appel();
     } catch (e) {
-      await this.plafond.annuler(r);
+      if (e instanceof SortieDicteeInvalide) {
+        // Réponse reçue donc facturée : on compte l'usage réel (ou l'estimation s'il est inconnu).
+        await this.plafond.enregistrer(r, e.usage);
+      } else {
+        await this.plafond.annuler(r);
+      }
       throw e;
     }
     await this.plafond.enregistrer(r, res.usage);

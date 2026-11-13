@@ -2,13 +2,21 @@
 
 export const MODELE_PAR_DEFAUT = "gemini-2.5-pro";
 
+/**
+ * Les jetons d'entrée et de sortie (réflexion comprise) sont plafonnés séparément :
+ * la sortie est facturée bien plus cher (voir ADR 0012 pour le calcul du budget).
+ */
 export interface SeuilsIA {
   maxRequetesJour: number;
-  maxJetonsJour: number;
+  maxJetonsEntreeJour: number;
+  maxJetonsSortieJour: number;
   maxRequetesMois: number;
-  maxJetonsMois: number;
-  /** Jetons réservés avant un appel (estimation prudente), remplacés par l'usage réel ensuite. */
-  jetonsReservesParAppel: number;
+  maxJetonsEntreeMois: number;
+  maxJetonsSortieMois: number;
+  /** Jetons d'entrée réservés avant un appel (estimation prudente), remplacés par l'usage réel ensuite. */
+  jetonsEntreeReservesParAppel: number;
+  /** Jetons de sortie (réflexion comprise) réservés avant un appel. */
+  jetonsSortieReservesParAppel: number;
 }
 
 export interface ConfigurationIA {
@@ -18,10 +26,13 @@ export interface ConfigurationIA {
 
 export const SEUILS_PAR_DEFAUT: SeuilsIA = {
   maxRequetesJour: 30,
-  maxJetonsJour: 300_000,
+  maxJetonsEntreeJour: 100_000,
+  maxJetonsSortieJour: 20_000,
   maxRequetesMois: 400,
-  maxJetonsMois: 3_000_000,
-  jetonsReservesParAppel: 20_000,
+  maxJetonsEntreeMois: 1_000_000,
+  maxJetonsSortieMois: 200_000,
+  jetonsEntreeReservesParAppel: 5_000,
+  jetonsSortieReservesParAppel: 4_000,
 };
 
 function entierPositif(valeur: string | undefined, defaut: number): number {
@@ -38,10 +49,13 @@ export function configurationIADepuisEnv(env: Record<string, string | undefined>
     modele: env.GEMINI_MODEL?.trim() || MODELE_PAR_DEFAUT,
     seuils: {
       maxRequetesJour: entierPositif(env.IA_MAX_REQUETES_JOUR, d.maxRequetesJour),
-      maxJetonsJour: entierPositif(env.IA_MAX_JETONS_JOUR, d.maxJetonsJour),
+      maxJetonsEntreeJour: entierPositif(env.IA_MAX_JETONS_ENTREE_JOUR, d.maxJetonsEntreeJour),
+      maxJetonsSortieJour: entierPositif(env.IA_MAX_JETONS_SORTIE_JOUR, d.maxJetonsSortieJour),
       maxRequetesMois: entierPositif(env.IA_MAX_REQUETES_MOIS, d.maxRequetesMois),
-      maxJetonsMois: entierPositif(env.IA_MAX_JETONS_MOIS, d.maxJetonsMois),
-      jetonsReservesParAppel: d.jetonsReservesParAppel,
+      maxJetonsEntreeMois: entierPositif(env.IA_MAX_JETONS_ENTREE_MOIS, d.maxJetonsEntreeMois),
+      maxJetonsSortieMois: entierPositif(env.IA_MAX_JETONS_SORTIE_MOIS, d.maxJetonsSortieMois),
+      jetonsEntreeReservesParAppel: d.jetonsEntreeReservesParAppel,
+      jetonsSortieReservesParAppel: d.jetonsSortieReservesParAppel,
     },
   };
 }

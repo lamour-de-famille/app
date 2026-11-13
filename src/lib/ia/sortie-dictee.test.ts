@@ -96,9 +96,16 @@ describe("vérification croisée avec la famille", () => {
 describe("doublure", () => {
   it("renvoie une sortie déterministe et trace les appels", async () => {
     const f = new ClientGeminiFactice({ sortie: valide as never });
-    const r = await f.traiterDictee({ audio: { octets: new Uint8Array(), mimeType: "audio/webm" }, contexteFamilial: "c", maintenant: new Date(0), adulteId: "alex" });
+    const r = await f.traiterDictee({ audio: { octets: new Uint8Array(), mimeType: "audio/webm" }, famille: familleFictive, maintenant: new Date(0), adulteId: "alex" });
     expect(r.resultat).toEqual(valide);
     expect(r.usage).toEqual({ jetonsEntree: 100, jetonsSortie: 50 });
     expect(f.appelsDictee).toHaveLength(1);
+  });
+
+  it("vérifie elle aussi les identifiants et porte l'usage de l'appel", async () => {
+    const f = new ClientGeminiFactice({ sortie: { ...valide, notes: [{ texte: "x", enfantId: "inconnu" }] } as never, usage: { jetonsEntree: 7, jetonsSortie: 3 } });
+    const e = await f.traiterDictee({ audio: { octets: new Uint8Array(), mimeType: "audio/webm" }, famille: familleFictive, maintenant: new Date(0), adulteId: "alex" }).catch((x) => x);
+    expect(e).toBeInstanceOf(SortieDicteeInvalide);
+    expect(e.usage).toEqual({ jetonsEntree: 7, jetonsSortie: 3 });
   });
 });
