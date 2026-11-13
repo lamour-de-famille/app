@@ -3,11 +3,126 @@
   --texte-secondaire: #4a4757;
   --carte: #ffffff;
   --rayon-carte: 24px;
+  --fond-haut: #fff0f6;
+  --fond-bas: #ffe4ee;
+  --focus: #1d1b26;
+  --cible-min: 44px;
+
+  /* Émotions : couleurs pleines, jamais portées seules (toujours un libellé). */
+  --emotion-joie: #ffc107;
+  --emotion-calme: #00b86b;
+  --emotion-tristesse: #1e6bff;
+  --emotion-colere: #ff3b2f;
+  --emotion-peur: #8b3dff;
+  --emotion-amour: #ff2e88;
+  /* Transparence par canal alpha uniquement, jamais de mix-blend-mode. */
+  --emotion-joie-voile: rgb(255 193 7 / 0.2);
+  --emotion-calme-voile: rgb(0 184 107 / 0.2);
+  --emotion-tristesse-voile: rgb(30 107 255 / 0.2);
+  --emotion-colere-voile: rgb(255 59 47 / 0.2);
+  --emotion-peur-voile: rgb(139 61 255 / 0.2);
+  --emotion-amour-voile: rgb(255 46 136 / 0.2);
+
+  --police-titre: "Bricolage Grotesque Variable", "Bricolage Grotesque", system-ui, sans-serif;
+  --police-corps: "Inter Variable", Inter, system-ui, sans-serif;
 }
 body {
   margin: 0;
   color: var(--texte);
-  font-family: Inter, system-ui, sans-serif;
+  font-family: var(--police-corps);
   min-height: 100vh;
-  background: linear-gradient(160deg, #fff0f6 0%, #ffe4ee 100%);
+  background: linear-gradient(160deg, var(--fond-haut) 0%, var(--fond-bas) 100%) fixed;
+}
+h1,
+h2,
+h3 {
+  font-family: var(--police-titre);
+  margin: 0 0 0.5rem;
+}
+.contenu {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 6rem;
+}
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.carte {
+  background: var(--carte);
+  border-radius: var(--rayon-carte);
+  padding: 1.25rem;
+  box-shadow: 0 2px 12px rgb(29 27 38 / 0.08);
+}
+.bouton {
+  min-height: var(--cible-min);
+  min-width: var(--cible-min);
+  padding: 0.5rem 1.25rem;
+  border: 2px solid var(--texte);
+  border-radius: 999px;
+  background: var(--texte);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.bouton--secondaire {
+  background: var(--carte);
+  color: var(--texte);
+}
+.bouton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.pastille {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--cible-min);
+  min-height: var(--cible-min);
+  font-weight: 700;
+  border: 3px solid transparent;
+  box-sizing: border-box;
+}
+.pastille--plein,
+.pastille--contour {
+  border-radius: 50%;
+}
+.pastille--tiers {
+  border-radius: 12px;
+  border-style: dashed;
+}
+.nav-basse {
+  position: fixed;
+  inset: auto 0 0 0;
+  background: var(--carte);
+  border-top-left-radius: var(--rayon-carte);
+  border-top-right-radius: var(--rayon-carte);
+  box-shadow: 0 -2px 12px rgb(29 27 38 / 0.1);
+}
+.nav-basse ul {
+  display: flex;
+  justify-content: space-around;
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem;
+}
+.nav-basse a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--cible-min);
+  min-width: 6rem;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  color: var(--texte-secondaire);
+  text-decoration: none;
+  font-weight: 500;
+}
+.nav-basse a[aria-current="page"] {
+  color: var(--texte);
+  font-weight: 700;
+  background: var(--fond-bas);
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
