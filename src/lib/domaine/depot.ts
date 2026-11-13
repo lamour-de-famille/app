@@ -68,5 +68,6 @@ export interface DepotFamille {
   lireJournal(): Promise<EntreeJournal[]>;
   /** Événements non encore consommés pour cet adulte. */
   evenementsANotifier(destinataireId: string): Promise<EvenementANotifier[]>;
-  marquerNotifie(evenementId: string): Promise<void>;
+  /** Seul le destinataire de l'événement peut l'acquitter. */
+  marquerNotifie(destinataireId: string, evenementId: string): Promise<void>;
 }
