@@ -1,0 +1,9 @@
+#!/bin/sh
+# Bloque le commit si un secret est détecté ou si l'identité d'auteur est incorrecte.
+[ "$(git config user.name)" = "lamour-de-famille" ] || { echo "Identité d'auteur incorrecte"; exit 1; }
+[ "$(git config user.email)" = "356411456+lamour-de-famille@users.noreply.github.com" ] || { echo "E-mail d'auteur incorrect"; exit 1; }
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --redact -c .gitleaks.toml || exit 1
+else
+  echo "gitleaks absent : contrôle des secrets impossible en local (la CI le fera)"
+fi
