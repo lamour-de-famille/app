@@ -153,3 +153,6 @@ vite.config.ts.timestamp-*
 
 # Next.js
 next-env.d.ts
+
+# Worktrees des équipiers
+.claude/worktrees/

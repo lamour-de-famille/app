@@ -3,19 +3,27 @@
 Mise à jour : 2026-11-13
 
 ## État
-Aucun arrêt en cours. Accès GitHub opérationnel (compte dédié, dépôt seul). `develop` publiée, CI verte (contrôle des secrets).
+Aucun arrêt en cours. Lot 1 (planning et agendas) : briques fusionnées dans `develop`, CI verte.
 
-## Fait
-- Définitions d'agents dans `.claude/agents/`
-- Garde-fous : `.env.example` sans valeurs, `.gitleaks.toml`, hook `pre-commit` (identité + secrets), CI gitleaks
-- `docs/HYPOTHESES.md`, `docs/adr/`
-- Branche `develop` poussée
+## Fait (lot 1)
+- Socle : Next.js, TypeScript, vitest, ESLint, CI (secrets, lint, types, tests, build), Dockerfile Cloud Run, manifeste PWA (PR 1)
+- Modèle de données : garde et présence distinctes, transferts, échanges, journal et événements à notifier, dépôt en mémoire durci (PR 4, 5)
+- Moteur de règles paramétré en base : parité ISO, moitiés et quarts, point de départ du décompte, règles dérivées, créneaux marqués et déplaçables avec écart, application idempotente (PR 8)
+- Outils rapides : dupliquer une semaine, appliquer un motif, échanger deux jours (PR 11, bibliothèque)
+- Vacances scolaires : import du jeu ouvert (doublure et fixture, client HTTP non exécuté en test) (PR 10)
+- Authentification Google avec liste d'adresses autorisées (doublure en test) (PR 2)
+- Synchro Google Agenda via doublure : marque propre, idempotence, événements étrangers intacts, reprise après expiration (PR 7)
+- Identité visuelle et briques d'interface (PR 3) ; écrans Aujourd'hui (PR 6) et Planning avec échange à accepter ou refuser (PR 9)
+- Test d'acceptation de bout en bout (PR 12)
 
-## En cours
-- Lot 1, tâche 0 : socle (PR lot-1/socle) en revue.
+## Reste à faire
+- Adaptateur Firestore (émulateur) derrière `DepotFamille` ; persistance de l'état de synchro
+- Protéger les pages par la session (aujourd'hui, routes masquées en production), brancher l'adulte connecté
+- Écrans pour les outils rapides et pour la saisie des règles ; déclenchement de la synchro
+- Vérification manuelle du client HTTP réel (vacances, Agenda) hors test
 
-## Reste
-- Lot 1 (planning et agendas), lot 2 (charge mentale), lot 3 (enfants et éclaboussures).
+## Cas d'arrêt à venir (hors périmètre des équipiers)
+- Création du client OAuth Google, secrets, projet et déploiement Cloud Run : actions dans les comptes du propriétaire.
 
 ## Mise en production
 Liste détaillée à compléter en fin de parcours.
