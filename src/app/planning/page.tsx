@@ -41,10 +41,17 @@ const MESSAGES: Record<string, string> = {
   refusee: "Demande refusée : rien n'est modifié et l'autre adulte sera prévenu.",
   proposee: "Demande envoyée : l'autre adulte sera prévenu.",
   "erreur-reponse": "Cette demande n'a pas pu être traitée (déjà traitée ou introuvable).",
+  "invalide-dates": "Dates invalides : vérifiez le premier et le dernier jour.",
+  "invalide-ordre": "Le dernier jour doit suivre le premier.",
+  "invalide-duree": "Une demande couvre au plus 31 jours.",
+  "invalide-jour": "Indiquez le premier jour.",
+  "invalide-enfants": "Choisissez au moins un enfant de la famille.",
+  "invalide-garde": "Indiquez qui aura la garde.",
+  invalide: "Demande incomplète ou impossible.",
   erreur: "Une erreur est survenue. Réessayez.",
 };
 
-type Params = { adulte?: string; mois?: string; jour?: string; resultat?: string; message?: string };
+type Params = { adulte?: string; mois?: string; jour?: string; resultat?: string };
 
 /** Doublure d'authentification : `?adulte=alex|sam` ; la route est masquée en production. */
 export default async function Planning({ searchParams }: { searchParams: Promise<Params> }) {
@@ -71,7 +78,7 @@ export default async function Planning({ searchParams }: { searchParams: Promise
     if (j) p.set("jour", j);
     return `/planning?${p.toString()}`;
   };
-  const resultat = q.resultat ? (q.resultat === "invalide" ? (q.message ?? "Demande incomplète.") : MESSAGES[q.resultat]) : null;
+  const resultat = q.resultat && Object.hasOwn(MESSAGES, q.resultat) ? MESSAGES[q.resultat] : null;
   const autre = famille.adultes.find((a) => a.id !== adulteId)!;
 
   return (
@@ -83,7 +90,7 @@ export default async function Planning({ searchParams }: { searchParams: Promise
         </p>
       ) : null}
 
-      <Carte>
+      <Carte className="carte--calendrier">
         <div className="mois-nav">
           <Link className="bouton bouton--secondaire" href={lien(vue.precedent)}>
             <span aria-hidden="true">‹</span> Mois précédent
@@ -145,13 +152,13 @@ export default async function Planning({ searchParams }: { searchParams: Promise
             <span aria-hidden="true" className="repere repere--tiers">
               –
             </span>{" "}
-            Carré gris pointillé : chez un tiers
+            Carré gris à bord tireté : chez un tiers
           </li>
           <li>
             <span aria-hidden="true" className="repere repere--inconnu">
               ?
             </span>{" "}
-            Non renseigné
+            Carré blanc à bord pointillé : non renseigné
           </li>
         </ul>
         <p className="discret">Un enfant par repère, dans l&apos;ordre : {famille.enfants.map((e) => e.prenom).join(", ")}.</p>

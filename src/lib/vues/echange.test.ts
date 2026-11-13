@@ -21,12 +21,18 @@ describe("construireDemande", () => {
     expect(construireDemande({ ...base, au: "" })).toMatchObject({ ok: true, demande: { jours: ["2026-11-20"] } });
   });
 
+  it("dédoublonne les enfants et donne un code de résultat", () => {
+    expect(construireDemande({ ...base, enfantIds: ["leo", "leo"] })).toMatchObject({ ok: true, demande: { enfantIds: ["leo"] } });
+    expect(construireDemande({ ...base, du: "2026-02-31" })).toMatchObject({ ok: false, code: "invalide-dates" });
+    expect(construireDemande({ ...base, garde: "?" })).toMatchObject({ ok: false, code: "invalide-garde" });
+  });
+
   it("explique chaque erreur en français", () => {
-    expect(construireDemande({ ...base, du: "" })).toEqual({ ok: false, message: "Indiquez le premier jour." });
-    expect(construireDemande({ ...base, enfantIds: [] })).toEqual({ ok: false, message: "Choisissez au moins un enfant." });
-    expect(construireDemande({ ...base, enfantIds: ["inconnu"] })).toEqual({ ok: false, message: "Enfant inconnu." });
-    expect(construireDemande({ ...base, garde: "?" })).toEqual({ ok: false, message: "Indiquez qui aura la garde." });
+    expect(construireDemande({ ...base, du: "" })).toMatchObject({ ok: false, message: "Indiquez le premier jour." });
+    expect(construireDemande({ ...base, enfantIds: [] })).toMatchObject({ ok: false, message: "Choisissez au moins un enfant." });
+    expect(construireDemande({ ...base, enfantIds: ["inconnu"] })).toMatchObject({ ok: false, message: "Enfant inconnu." });
+    expect(construireDemande({ ...base, garde: "?" })).toMatchObject({ ok: false, message: "Indiquez qui aura la garde." });
     expect(construireDemande({ ...base, au: "2026-11-19" })).toMatchObject({ ok: false });
-    expect(construireDemande({ ...base, adulteId: "x" })).toEqual({ ok: false, message: "Adulte inconnu." });
+    expect(construireDemande({ ...base, adulteId: "x" })).toMatchObject({ ok: false, message: "Adulte inconnu." });
   });
 });

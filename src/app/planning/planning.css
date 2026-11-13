@@ -41,7 +41,14 @@ a.bouton {
   padding: 0.25rem 0;
 }
 .calendrier td {
-  padding: 2px;
+  padding: 0;
+}
+/* Carte du calendrier : marges réduites pour tenir 7 x 44 px à 360 px (voir planning.test.ts). */
+.carte--calendrier {
+  padding-inline: 0.25rem;
+}
+.carte--calendrier > :not(.calendrier) {
+  padding-inline: 0.75rem;
 }
 .calendrier .hors-mois .jour {
   background: transparent;
@@ -86,7 +93,7 @@ a.bouton {
 .repere--tiers {
   border-radius: 3px;
   border: 2px dashed #6b6878;
-  background: #e3e1e8;
+  background: #d9d6e0;
 }
 .repere--inconnu {
   border: 2px dotted #6b6878;
@@ -101,9 +108,12 @@ a.bouton {
   gap: 0.25rem;
 }
 .legende .repere {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   vertical-align: middle;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
 }
 .legende-plein {
   background: var(--texte);

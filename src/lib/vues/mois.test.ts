@@ -56,6 +56,11 @@ describe("joursEntre", () => {
     expect(joursEntre("2026-11-29", "2026-12-02")).toEqual(["2026-11-29", "2026-11-30", "2026-12-01", "2026-12-02"]);
     expect(joursEntre("2026-11-13", "2026-11-13")).toEqual(["2026-11-13"]);
   });
+  it("refuse les dates impossibles", () => {
+    expect(() => joursEntre("2026-02-31", "2026-03-02")).toThrow("Dates invalides");
+    expect(() => joursEntre("2026-03-01", "2026-04-31")).toThrow("Dates invalides");
+    expect(() => joursEntre("2026-13-01", "2026-13-02")).toThrow("Dates invalides");
+  });
   it("refuse une plage inversée, invalide ou trop longue", () => {
     expect(() => joursEntre("2026-11-14", "2026-11-13")).toThrow();
     expect(() => joursEntre("hier", "2026-11-13")).toThrow();

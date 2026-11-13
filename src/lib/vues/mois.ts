@@ -53,7 +53,9 @@ export function joursEntre(du: DateJour, au: DateJour): DateJour[] {
   if (!a || !b) throw new Error("Dates invalides");
   const debut = Date.UTC(Number(a[1]), Number(a[2]) - 1, Number(a[3]));
   const fin = Date.UTC(Number(b[1]), Number(b[2]) - 1, Number(b[3]));
-  if (Number.isNaN(debut) || Number.isNaN(fin)) throw new Error("Dates invalides");
+  if (Number.isNaN(debut) || Number.isNaN(fin) || iso(new Date(debut)) !== du || iso(new Date(fin)) !== au) {
+    throw new Error("Dates invalides");
+  }
   if (fin < debut) throw new Error("La fin précède le début");
   const n = Math.round((fin - debut) / 86_400_000) + 1;
   if (n > MAX_JOURS_DEMANDE) throw new Error(`Plus de ${MAX_JOURS_DEMANDE} jours`);

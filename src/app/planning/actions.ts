@@ -17,10 +17,10 @@ const texte = (f: FormData, nom: string) => {
   return typeof v === "string" ? v : "";
 };
 
-function retour(adulte: string, mois: string, resultat: string, extra = ""): never {
+function retour(adulte: string, mois: string, resultat: string): never {
   const q = new URLSearchParams({ adulte, resultat });
   if (/^\d{4}-\d{2}$/.test(mois)) q.set("mois", mois);
-  redirect(`/planning?${q.toString()}${extra}`);
+  redirect(`/planning?${q.toString()}`);
 }
 
 /** Doublure d'authentification : l'adulte vient du formulaire tant que l'auth réelle n'existe pas. */
@@ -51,7 +51,6 @@ export async function proposerEchange(f: FormData) {
   const adulte = adulteDe(f);
   const mois = texte(f, "mois");
   let issue = "erreur";
-  let extra = "";
   try {
     const depot = await depotPartage(aujourdhuiLocal());
     const famille = await depot.lireFamille();
@@ -67,12 +66,10 @@ export async function proposerEchange(f: FormData) {
       await depot.proposerEchange(adulte, r.demande);
       issue = "proposee";
     } else {
-      issue = "invalide";
-      extra = `&message=${encodeURIComponent(r.message)}`;
+      issue = r.code;
     }
   } catch (e) {
     issue = e instanceof ErreurDomaine ? "invalide" : "erreur";
-    if (e instanceof ErreurDomaine) extra = `&message=${encodeURIComponent(e.message)}`;
   }
-  retour(adulte, mois, issue, extra);
+  retour(adulte, mois, issue);
 }
