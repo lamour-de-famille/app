@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { grilleMois, joursEntre, moisAdjacent, analyserMois } from "./mois";
+import { dateValide, grilleMois, joursEntre, moisAdjacent, analyserMois } from "./mois";
 
 describe("grilleMois", () => {
   it("novembre 2026 : commence un lundi 26 octobre et finit un dimanche 6 décembre", () => {
@@ -65,5 +65,15 @@ describe("joursEntre", () => {
     expect(() => joursEntre("2026-11-14", "2026-11-13")).toThrow();
     expect(() => joursEntre("hier", "2026-11-13")).toThrow();
     expect(() => joursEntre("2026-01-01", "2026-06-01")).toThrow();
+  });
+});
+
+describe("dateValide", () => {
+  it("accepte une date réelle et refuse les dates impossibles", () => {
+    expect(dateValide("2026-11-30")).toBe(true);
+    expect(dateValide("2026-11-31")).toBe(false);
+    expect(dateValide("2026-11-99")).toBe(false);
+    expect(dateValide("2026-11-00")).toBe(false);
+    expect(dateValide("n'importe quoi")).toBe(false);
   });
 });

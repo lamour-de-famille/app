@@ -4,7 +4,7 @@ import { Bouton } from "@/components/Bouton";
 import { Carte } from "@/components/Carte";
 import { RepereEnfant } from "@/components/RepereEnfant";
 import { chargerPlanning, depotPartage } from "@/lib/vues/chargeur-planning";
-import { analyserMois } from "@/lib/vues/mois";
+import { analyserMois, dateValide } from "@/lib/vues/mois";
 import { proposerEchange, repondreDemande } from "./actions";
 import "./planning.css";
 
@@ -62,7 +62,7 @@ export default async function Planning({ searchParams }: { searchParams: Promise
   const { annee, mois } = analyserMois(q.mois, aujourdhui.slice(0, 7));
   const moisTexte = `${annee}-${String(mois).padStart(2, "0")}`;
   const jour =
-    q.jour && /^\d{4}-\d{2}-\d{2}$/.test(q.jour) && q.jour.startsWith(moisTexte)
+    q.jour && dateValide(q.jour) && q.jour.startsWith(moisTexte)
       ? q.jour
       : aujourdhui.startsWith(moisTexte)
         ? aujourdhui

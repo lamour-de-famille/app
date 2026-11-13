@@ -47,6 +47,16 @@ export function analyserMois(valeur: string | undefined, repli: string): { annee
 export const MAX_JOURS_DEMANDE = 31;
 
 /** Tous les jours de `du` à `au`, bornes incluses. */
+/** Vrai si la chaîne est une date calendaire réelle (AAAA-MM-JJ). */
+export function dateValide(texte: string): boolean {
+  try {
+    joursEntre(texte, texte);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function joursEntre(du: DateJour, au: DateJour): DateJour[] {
   const a = RE_DATE.exec(du);
   const b = RE_DATE.exec(au);
