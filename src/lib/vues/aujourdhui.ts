@@ -50,6 +50,16 @@ export interface EntreeVue {
   affairesParEnfant?: Record<string, string[]>;
 }
 
+/** Pastille d'un enfant selon le lieu où il dort, du point de vue de l'adulte connecté. */
+export function etatDuLieu(famille: Famille, adulteId: string, lieuId: string | undefined): EtatPastille {
+  const index = famille.adultes.findIndex((a) => a.id === adulteId);
+  const type = famille.lieux.find((l) => l.id === lieuId)?.type;
+  if (index < 0 || !type) return "tiers";
+  if (type === (index === 0 ? "domicile_a" : "domicile_b")) return "adulte-connecte";
+  if (type === (index === 0 ? "domicile_b" : "domicile_a")) return "autre-adulte";
+  return "tiers";
+}
+
 /** Que montrer aujourd'hui pour tel adulte : fonction pure, sans accès aux données. */
 export function choisirVueAujourdhui(e: EntreeVue): VueAujourdhui {
   const { famille, adulteId, date } = e;
@@ -65,8 +75,7 @@ export function choisirVueAujourdhui(e: EntreeVue): VueAujourdhui {
     const g = e.gardes.find((x) => x.enfantId === enfant.id && x.date === date);
     const p = e.presences.find((x) => x.enfantId === enfant.id && x.date === date);
     const lieu = p ? lieuDe(p.lieuId) : undefined;
-    const etat: EtatPastille =
-      lieu?.type === typeMoi ? "adulte-connecte" : lieu?.type === typeAutre ? "autre-adulte" : "tiers";
+    const etat = etatDuLieu(famille, adulteId, p?.lieuId);
     // Le responsable est « chez lui » s'il dort à son propre domicile.
     const domicileResponsable = g ? (g.responsableId === moi.id ? typeMoi : typeAutre) : null;
     const divergence = Boolean(g && lieu && lieu.type !== domicileResponsable);
