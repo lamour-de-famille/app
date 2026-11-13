@@ -1,0 +1,163 @@
+a.bouton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+.sr-seul {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.message {
+  background: var(--carte);
+  border-radius: var(--rayon-carte);
+  border: 2px solid var(--texte);
+  padding: 0.75rem 1rem;
+}
+.mois-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.mois-titre {
+  text-align: center;
+  text-transform: capitalize;
+  margin: 0.75rem 0 0.5rem;
+}
+.calendrier {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.calendrier th {
+  font-weight: 600;
+  color: var(--texte-secondaire);
+  padding: 0.25rem 0;
+}
+.calendrier td {
+  padding: 2px;
+}
+.calendrier .hors-mois .jour {
+  background: transparent;
+  border-style: dashed;
+}
+.jour {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 3.5rem;
+  min-width: var(--cible-min);
+  padding: 0.25rem 0;
+  box-sizing: border-box;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  color: var(--texte);
+  text-decoration: none;
+  background: #faf8fb;
+}
+.jour--choisi {
+  border-color: var(--texte);
+  font-weight: 700;
+  text-decoration: underline;
+}
+.reperes {
+  display: flex;
+  gap: 2px;
+}
+.repere {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  font-size: 0;
+  color: var(--texte);
+}
+.repere--tiers {
+  border-radius: 3px;
+  border: 2px dashed #6b6878;
+  background: #e3e1e8;
+}
+.repere--inconnu {
+  border: 2px dotted #6b6878;
+  border-radius: 3px;
+  background: #fff;
+}
+.legende {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0.5rem;
+  display: grid;
+  gap: 0.25rem;
+}
+.legende .repere {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+}
+.legende-plein {
+  background: var(--texte);
+  border-color: var(--texte);
+}
+.legende .repere--contour {
+  background: #fff;
+  border-color: var(--texte);
+}
+.demandes {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.reponse {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.proposer summary {
+  min-height: var(--cible-min);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 700;
+  font-family: var(--police-titre);
+  font-size: 1.25rem;
+}
+.formulaire {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.formulaire label {
+  display: grid;
+  gap: 0.25rem;
+}
+.formulaire input[type="date"] {
+  min-height: var(--cible-min);
+  font: inherit;
+  padding: 0 0.5rem;
+}
+.formulaire fieldset {
+  border: 1px solid var(--texte-secondaire);
+  border-radius: 12px;
+}
+.formulaire .choix {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: var(--cible-min);
+}
+.formulaire .choix input {
+  width: 1.5rem;
+  height: 1.5rem;
+  accent-color: var(--texte);
+}
