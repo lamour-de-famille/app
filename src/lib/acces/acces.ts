@@ -31,7 +31,7 @@ export function adulteDepuisEmail(email: string, famille: Famille, brut: string 
   return id && famille.adultes.some((a) => a.id === id) ? id : null;
 }
 
-export type Acces = { ok: true; adulteId: string; demo: boolean } | { ok: false; redirection: "/connexion" };
+export type Acces = { ok: true; adulteId: string; demo: boolean } | { ok: false; redirection: "/connexion" | "/connexion?erreur=adulte-absent" };
 
 /**
  * Décision de garde (pure). L'adulte vient de la session ; le paramètre `adulteParam`
@@ -45,7 +45,8 @@ export function resoudreAcces(p: {
   cle?: string;
 }): Acces {
   if (modeDemoActif(p.env)) {
-    const demande = p.adulteParam === "alex" || p.adulteParam === "sam" ? p.adulteParam : "alex";
+    const ids = p.famille.adultes.map((a) => a.id);
+    const demande = p.adulteParam && ids.includes(p.adulteParam) ? p.adulteParam : ids[0]!;
     return { ok: true, adulteId: demande, demo: true };
   }
   const session = lireSession(p.jeton, p.cle ?? p.env.SESSION_SECRET);
@@ -53,7 +54,8 @@ export function resoudreAcces(p: {
     return { ok: false, redirection: "/connexion" };
   }
   const adulteId = adulteDepuisEmail(session.email, p.famille, p.env.ADULTES_EMAILS);
-  return adulteId ? { ok: true, adulteId, demo: false } : { ok: false, redirection: "/connexion" };
+  // Compte autorisé mais sans adulte rattaché : message explicite (pas de boucle silencieuse).
+  return adulteId ? { ok: true, adulteId, demo: false } : { ok: false, redirection: "/connexion?erreur=adulte-absent" };
 }
 
 /** Session valide ou null. Sans jeton, ou si le secret manque ou est trop court : pas de session (jamais d'erreur 500). */

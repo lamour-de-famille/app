@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { familleFictive } from "@/lib/domaine/fixture-famille";
 import { creerJeton } from "@/lib/auth/session";
 import { adulteDepuisEmail, lireCorrespondance, modeDemoActif, resoudreAcces } from "./acces";
-import { obtenirDepot } from "./depot";
+import { BanqueMemoire } from "@/lib/firestore/banque-memoire";
+import { DepotFirestore } from "@/lib/firestore/depot-firestore";
+import { ErreurNonConfigure, obtenirDepot } from "./depot";
 
 const CLE = "cle-de-test-fictive-0123456789-abcdefghij";
 const ENV_PROD = { NODE_ENV: "production", ADULTES_EMAILS: "alex=alex@exemple.invalid, sam=Sam@exemple.invalid", ALLOWED_EMAILS: "alex@exemple.invalid,sam@exemple.invalid" };
@@ -46,8 +48,14 @@ describe("garde des pages protégées", () => {
   it("e-mail retiré de la liste autorisée : refus", () => {
     expect(acces({ ...ENV_PROD, ALLOWED_EMAILS: "alex@exemple.invalid" }, { jeton: jeton("sam@exemple.invalid") }).ok).toBe(false);
   });
-  it("e-mail sans adulte correspondant : refus", () => {
-    expect(acces({ ...ENV_PROD, ADULTES_EMAILS: "" }, { jeton: jeton("alex@exemple.invalid") }).ok).toBe(false);
+  it("e-mail autorisé mais absent de ADULTES_EMAILS : redirection explicite, pas de boucle silencieuse", () => {
+    expect(acces({ ...ENV_PROD, ADULTES_EMAILS: "" }, { jeton: jeton("alex@exemple.invalid") })).toEqual({
+      ok: false,
+      redirection: "/connexion?erreur=adulte-absent",
+    });
+  });
+  it("sans session valide : /connexion sans erreur", () => {
+    expect(acces(ENV_PROD, { jeton: "x.y" })).toEqual({ ok: false, redirection: "/connexion" });
   });
   it("production : ?adulte= est ignoré, même avec MODE_DEMO=1", () => {
     const env = { ...ENV_PROD, MODE_DEMO: "1" };
@@ -63,15 +71,52 @@ describe("garde des pages protégées", () => {
     expect(acces(env, { adulteParam: "pirate" })).toEqual({ ok: true, adulteId: "alex", demo: true });
     expect(acces(env)).toEqual({ ok: true, adulteId: "alex", demo: true });
   });
+  it("les ids viennent de famille.adultes, pas de valeurs en dur", () => {
+    const env = { NODE_ENV: "development", MODE_DEMO: "1" };
+    const famille = { ...familleFictive, adultes: [{ id: "robin", prenom: "Robin", role: "parent" }, { id: "kim", prenom: "Kim", role: "parent" }] } as typeof familleFictive;
+    const r = (adulteParam?: string) => resoudreAcces({ env, famille, adulteParam });
+    expect(r("kim")).toEqual({ ok: true, adulteId: "kim", demo: true });
+    expect(r("sam")).toEqual({ ok: true, adulteId: "robin", demo: true });
+    expect(r()).toEqual({ ok: true, adulteId: "robin", demo: true });
+  });
 });
 
 describe("obtenirDepot", () => {
-  it("production : doublure mémoire vide, sans données de démonstration, partagée", async () => {
-    const env = { NODE_ENV: "production", MODE_DEMO: "1" };
-    const d = await obtenirDepot("2026-11-14", env);
-    expect(await d.listerPresences({ du: "2026-11-01", au: "2026-11-30" })).toEqual([]);
-    expect(await d.listerDemandes()).toEqual([]);
-    expect(await obtenirDepot("2026-11-14", env)).toBe(d);
+  const PROD = { NODE_ENV: "production", MODE_DEMO: "1" };
+  it("hors démo, la famille fictive n'est jamais lue : la famille vient de la base", async () => {
+    const banque = new BanqueMemoire();
+    const reelle = {
+      ...familleFictive,
+      nom: "Famille Réelle Test",
+      adultes: [{ id: "robin", prenom: "Robin", role: "parent" }, { id: "kim", prenom: "Kim", role: "parent" }],
+    } as typeof familleFictive;
+    await new DepotFirestore(banque, "fam-1").initialiserFamille(reelle);
+    for (const env of [PROD, { NODE_ENV: "development" }]) {
+      const d = await obtenirDepot("2026-11-14", { ...env, FAMILLE_ID: "fam-1" }, banque);
+      const f = await d.lireFamille();
+      expect(f.nom).toBe("Famille Réelle Test");
+      expect(f.adultes.map((a) => a.id)).toEqual(["robin", "kim"]);
+      expect(await d.listerDemandes()).toEqual([]);
+    }
+  });
+  it("configuration absente : erreur explicite, aucune fixture", async () => {
+    await expect(obtenirDepot("2026-11-14", PROD)).rejects.toBeInstanceOf(ErreurNonConfigure);
+    await expect(obtenirDepot("2026-11-14", { ...PROD, FAMILLE_ID: "fam-1" })).rejects.toThrow(/FIRESTORE_PROJECT_ID/);
+    await expect(obtenirDepot("2026-11-14", { ...PROD, FIRESTORE_PROJECT_ID: "p" })).rejects.toThrow(/FAMILLE_ID/);
+  });
+  it("famille absente de la base : erreur explicite", async () => {
+    await expect(obtenirDepot("2026-11-14", { ...PROD, FAMILLE_ID: "fam-1" }, new BanqueMemoire())).rejects.toThrow(
+      /initialiser-famille/,
+    );
+  });
+  it("une écriture non configurée est refusée et rien n'est écrit", async () => {
+    const ecrire = async () => (await obtenirDepot("2026-11-14", PROD)).repondreEchange("alex", "d", "acceptee");
+    await expect(ecrire()).rejects.toBeInstanceOf(ErreurNonConfigure);
+    const banque = new BanqueMemoire();
+    const sansFamille = async () =>
+      (await obtenirDepot("2026-11-14", { ...PROD, FAMILLE_ID: "x" }, banque)).repondreEchange("alex", "d", "acceptee");
+    await expect(sansFamille()).rejects.toBeInstanceOf(ErreurNonConfigure);
+    expect(banque.compter()).toBe(0);
   });
   it("mode démo : dépôt peuplé", async () => {
     const d = await obtenirDepot("2026-11-14", { NODE_ENV: "development", MODE_DEMO: "1" });
