@@ -9,6 +9,7 @@ import type {
   Presence,
   Transfert,
 } from "./types";
+import type { Regle } from "../regles/types";
 
 export class ErreurDomaine extends Error {
   constructor(message: string) {
@@ -64,6 +65,12 @@ export interface DepotFamille {
     demandeId: string,
     reponse: "acceptee" | "refusee",
   ): Promise<DemandeEchange>;
+
+  /** Règles de planning : données sérialisables, validées à l'écriture. Le remplacement se fait par id. */
+  listerRegles(): Promise<Regle[]>;
+  enregistrerRegle(auteurId: string, regle: Regle): Promise<Regle>;
+  /** Refusé si une règle dérivée en dépend. */
+  supprimerRegle(auteurId: string, id: string): Promise<void>;
 
   lireJournal(): Promise<EntreeJournal[]>;
   /** Événements non encore consommés pour cet adulte. */

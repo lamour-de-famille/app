@@ -99,7 +99,7 @@ export interface DemandeEchange {
   repondeurId?: string;
 }
 
-export type EntiteJournal = "garde" | "presence" | "transfert" | "creneau" | "demande";
+export type EntiteJournal = "garde" | "presence" | "transfert" | "creneau" | "demande" | "regle";
 export type ActionJournal = "creation" | "modification" | "suppression";
 
 export interface EntreeJournal {
