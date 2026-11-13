@@ -8,16 +8,27 @@ function redirection(request: Request, chemin: string, cookies: string[] = []): 
   return new Response(null, { status: 303, headers: entetes });
 }
 
-const redirectUri = (request: Request) => new URL("/api/auth/callback", request.url).toString();
+/** Origine publique : `APP_URL` si définie, sinon l'origine de la requête (développement local). */
+export function redirectUri(request: Request, appUrl: string | undefined = process.env.APP_URL): string {
+  return new URL("/api/auth/callback", appUrl || request.url).toString();
+}
 
-export function demarrerConnexion(request: Request, fournisseur: FournisseurIdentite): Response {
-  const { etat, cookie } = nouvelEtat();
-  return redirection(request, fournisseur.urlAutorisation(etat, redirectUri(request)), [cookie]);
+type Source = FournisseurIdentite | (() => FournisseurIdentite);
+const resoudre = (s: Source) => (typeof s === "function" ? s() : s);
+
+export function demarrerConnexion(request: Request, source: Source): Response {
+  try {
+    const { etat, cookie } = nouvelEtat();
+    return redirection(request, resoudre(source).urlAutorisation(etat, redirectUri(request)), [cookie]);
+  } catch {
+    // Identifiants manquants ou URL invalide : retour propre plutôt qu'une erreur 500.
+    return redirection(request, "/connexion?erreur=echec");
+  }
 }
 
 export async function terminerConnexion(
   request: Request,
-  fournisseur: FournisseurIdentite,
+  source: Source,
   liste?: string[],
 ): Promise<Response> {
   const url = new URL(request.url);
@@ -26,7 +37,7 @@ export async function terminerConnexion(
   const code = url.searchParams.get("code");
   if (!code) return redirection(request, "/connexion?erreur=refuse", purge);
   try {
-    const identite = await fournisseur.echangerCode(code, redirectUri(request));
+    const identite = await resoudre(source).echangerCode(code, redirectUri(request));
     if (!estAutorise(identite.email, liste)) return redirection(request, "/connexion?erreur=non-autorise", purge);
     return redirection(request, "/", [...purge, cookieSession(identite)]);
   } catch {

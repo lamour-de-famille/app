@@ -30,6 +30,7 @@ export class FournisseurIdentiteGoogle implements FournisseurIdentite {
     private readonly clientId: string,
     private readonly clientSecret: string,
     private readonly appelReseau: typeof fetch = fetch,
+    private readonly maintenant: () => number = Date.now,
   ) {}
 
   urlAutorisation(state: string, redirectUri: string): string {
@@ -57,11 +58,19 @@ export class FournisseurIdentiteGoogle implements FournisseurIdentite {
     if (!reponse.ok) throw new Error("Échange du code refusé");
     const { id_token } = (await reponse.json()) as { id_token?: string };
     // Jeton reçu directement de Google en TLS : on contrôle son contenu sans revérifier la signature.
-    const charge = JSON.parse(
-      Buffer.from((id_token ?? "").split(".")[1] ?? "", "base64url").toString("utf8"),
-    ) as { aud?: string; iss?: string; email?: string; email_verified?: boolean; name?: string };
+    const morceaux = (id_token ?? "").split(".");
+    if (morceaux.length !== 3) throw new Error("Jeton d'identité absent ou mal formé");
+    const charge = JSON.parse(Buffer.from(morceaux[1]!, "base64url").toString("utf8")) as {
+      aud?: string;
+      iss?: string;
+      exp?: number;
+      email?: string;
+      email_verified?: boolean;
+      name?: string;
+    };
     const issuerOk = charge.iss === "https://accounts.google.com" || charge.iss === "accounts.google.com";
-    if (!issuerOk || charge.aud !== this.clientId || !charge.email || charge.email_verified !== true) {
+    const expOk = typeof charge.exp === "number" && charge.exp * 1000 > this.maintenant();
+    if (!issuerOk || !expOk || charge.aud !== this.clientId || !charge.email || charge.email_verified !== true) {
       throw new Error("Jeton d'identité invalide");
     }
     return { email: charge.email, nom: charge.name ?? charge.email };

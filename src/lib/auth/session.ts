@@ -1,8 +1,9 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { estAutorise } from "./autorisation";
 import type { Identite } from "./identite";
 
-export const NOM_COOKIE_SESSION = "session";
-export const NOM_COOKIE_ETAT = "etat_oauth";
+export const NOM_COOKIE_SESSION = "__Host-session";
+export const NOM_COOKIE_ETAT = "__Host-etat_oauth";
 export const DUREE_SESSION_S = 7 * 24 * 3600;
 const DUREE_ETAT_S = 600;
 
@@ -49,6 +50,7 @@ export function lireCookie(request: Request, nom: string): string | undefined {
   return undefined;
 }
 
+/** Préfixe `__Host-` : le navigateur impose Secure, Path=/ et l'absence de Domain. */
 export function cookie(nom: string, valeur: string, dureeS: number): string {
   return `${nom}=${valeur}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${dureeS}`;
 }
@@ -71,8 +73,9 @@ export function etatValide(request: Request, recu: string | null): boolean {
  * Protège une route ou une page serveur : retourne la session ou lève une Response 401.
  * Usage dans une route : `try { const s = exigerSession(request) } catch (e) { if (e instanceof Response) return e; throw e }`
  */
-export function exigerSession(request: Request): Session {
+export function exigerSession(request: Request, liste?: string[]): Session {
   const session = verifierJeton(lireCookie(request, NOM_COOKIE_SESSION));
-  if (!session) throw Response.json({ erreur: "Connexion requise" }, { status: 401 });
+  // L'autorisation est revérifiée à chaque requête : retirer une adresse de la liste coupe l'accès immédiatement.
+  if (!session || !estAutorise(session.email, liste)) throw Response.json({ erreur: "Connexion requise" }, { status: 401 });
   return session;
 }
