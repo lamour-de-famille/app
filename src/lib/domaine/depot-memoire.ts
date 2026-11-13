@@ -44,7 +44,22 @@ function validerFamille(f: Famille) {
 export interface OptionsDepotMemoire {
   /** Horloge injectable (tests). */
   maintenant?: () => Date;
+  /** Générateur d'ids injectable (ex. ids uniques et triables pour un stockage partagé). */
+  genererId?: (prefixe: string) => string;
 }
+
+/** Collections de l'état d'un dépôt ; les clés sont celles des documents (« enfant|date » ou id). */
+export interface EtatDepot {
+  gardes: Record<string, Garde>;
+  presences: Record<string, Presence>;
+  transferts: Record<string, Transfert>;
+  creneaux: Record<string, Creneau>;
+  demandes: Record<string, DemandeEchange>;
+  regles: Record<string, Regle>;
+  journal: Record<string, EntreeJournal>;
+  evenements: Record<string, EvenementANotifier>;
+}
+export type NomCollection = keyof EtatDepot;
 
 const copie = <T>(v: T): T => structuredClone(v);
 const dansPeriode = (date: string, f?: FiltrePeriode) =>
@@ -53,6 +68,7 @@ const dansPeriode = (date: string, f?: FiltrePeriode) =>
 export class DepotMemoire implements DepotFamille {
   private readonly famille: Famille;
   private readonly maintenant: () => Date;
+  private readonly genererId?: (prefixe: string) => string;
   private compteur = 0;
   private gardes = new Map<string, Garde>();
   private presences = new Map<string, Presence>();
@@ -70,6 +86,36 @@ export class DepotMemoire implements DepotFamille {
     validerFamille(famille);
     this.famille = copie(famille);
     this.maintenant = options.maintenant ?? (() => new Date());
+    this.genererId = options.genererId;
+  }
+
+  /** Copie de l'état courant, par collection (sert aux adaptateurs de stockage). */
+  exporterEtat(): EtatDepot {
+    const obj = <T>(m: Map<string, T>) => Object.fromEntries([...m].map(([k, v]) => [k, copie(v)]));
+    const parId = <T extends { id: string }>(l: T[]) => Object.fromEntries(l.map((v) => [v.id, copie(v)]));
+    return {
+      gardes: obj(this.gardes),
+      presences: obj(this.presences),
+      transferts: obj(this.transferts),
+      creneaux: obj(this.creneaux),
+      demandes: obj(this.demandes),
+      regles: obj(this.regles),
+      journal: parId(this.journal),
+      evenements: parId(this.evenements),
+    };
+  }
+
+  /** Remplace l'état (l'ordre du journal et des événements suit celui de l'objet). */
+  restaurerEtat(etat: Partial<EtatDepot>) {
+    const map = <T>(o: Record<string, T> | undefined) => new Map(Object.entries(copie(o ?? {})));
+    this.gardes = map(etat.gardes);
+    this.presences = map(etat.presences);
+    this.transferts = map(etat.transferts);
+    this.creneaux = map(etat.creneaux);
+    this.demandes = map(etat.demandes);
+    this.regles = map(etat.regles);
+    this.journal = Object.values(copie(etat.journal ?? {}));
+    this.evenements = Object.values(copie(etat.evenements ?? {}));
   }
 
   async lireFamille() {
@@ -271,7 +317,7 @@ export class DepotMemoire implements DepotFamille {
   /** Génère un id ; si `magasin` est fourni, saute les ids déjà pris (fournis par l'appelant). */
   private nouvelId(prefixe: string, magasin?: Map<string, unknown>) {
     let id: string;
-    do id = `${prefixe}-${++this.compteur}`;
+    do id = this.genererId ? this.genererId(prefixe) : `${prefixe}-${++this.compteur}`;
     while (magasin?.has(id));
     return id;
   }
