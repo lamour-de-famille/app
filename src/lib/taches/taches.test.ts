@@ -72,9 +72,10 @@ describe("validation à l'écriture", () => {
   });
   it("crée avec valeurs par défaut et modifie en gardant le créateur", async () => {
     const d = nouveau();
-    const t = await d.enregistrer("alex", { ...base, enfantId: "mila" });
-    expect(t).toMatchObject({ statut: "a_faire", creeParId: "alex", enfantId: "mila" });
-    const m = await d.enregistrer("sam", { id: t.id, titre: "Autre", assigneId: "alex" });
+    const { id } = await d.enregistrer("alex", { ...base, enfantId: "mila" });
+    expect((await d.lister())[0]).toMatchObject({ statut: "a_faire", creeParId: "alex", enfantId: "mila" });
+    await d.enregistrer("sam", { id, titre: "Autre", assigneId: "alex" });
+    const m = (await d.lister())[0]!;
     expect(m).toMatchObject({ creeParId: "alex", titre: "Autre", assigneId: "alex" });
     expect(m.enfantId).toBeUndefined();
   });
@@ -103,15 +104,15 @@ describe("cocher une occurrence", () => {
     await expect(d.cocher("alex", s.id)).rejects.toThrow();
     const p = await d.enregistrer("alex", { titre: "p", assigneId: "alex", echeance: AUJ });
     await expect(d.cocher("alex", p.id, AUJ)).rejects.toThrow();
-    const f = await d.cocher("sam", p.id);
-    expect(f).toMatchObject({ statut: "faite", faiteLe: "2026-11-11T08:00:00.000Z" });
+    await d.cocher("sam", p.id);
+    expect((await d.lister()).find((x) => x.id === p.id)).toMatchObject({ statut: "faite", faiteLe: "2026-11-11T08:00:00.000Z" });
   });
   it("changer la série écarte les exceptions orphelines", async () => {
     const d = nouveau();
     const t = await d.enregistrer("alex", { titre: "s", assigneId: "alex", echeance: AUJ, recurrence: { frequence: "quotidienne", intervalle: 1 } });
     await d.cocher("alex", t.id, "2026-11-12");
-    const m = await d.enregistrer("alex", { id: t.id, titre: "s", assigneId: "alex", echeance: AUJ, recurrence: { frequence: "hebdomadaire", intervalle: 1 } });
-    expect(m.exceptions).toEqual([]);
+    await d.enregistrer("alex", { id: t.id, titre: "s", assigneId: "alex", echeance: AUJ, recurrence: { frequence: "hebdomadaire", intervalle: 1 } });
+    expect((await d.lister())[0]!.exceptions).toEqual([]);
   });
 });
 
@@ -179,7 +180,7 @@ describe("vues par adulte", () => {
 
   it("la tâche faite sort du retard ; une occurrence cochée sort, les autres restent", async () => {
     const { d, retardAlex, serie } = await jeu();
-    await d.cocher("sam", retardAlex.id);
+    await d.cocher("alex", retardAlex.id);
     await d.cocher("sam", serie.id, "2026-11-02");
     const a = await tachesPourAdulte(d, famille, "alex", AUJ);
     expect(a.aRattraper).toEqual([]);

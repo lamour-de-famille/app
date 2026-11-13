@@ -45,6 +45,15 @@ export interface Tache {
 export type NouvelleTache = Omit<Tache, "id" | "statut" | "faiteLe" | "exceptions" | "creeParId"> & { id?: string };
 
 /**
+ * Retour minimal des écritures : l'appelant n'obtient jamais la tâche brute (échéance, statut, exceptions),
+ * ce qui révélerait le retard de l'autre adulte. `cle` n'est présente que pour une occurrence cochée/décochée.
+ */
+export interface AccuseTache {
+  id: string;
+  cle?: string;
+}
+
+/**
  * Occurrence concrète d'une tâche. `cle` est stable (`<tacheId>@<date>` ou `<tacheId>@sans-date`) :
  * c'est la clé à utiliser pour la synchro Google Tasks.
  */

@@ -1,3 +1,4 @@
+import { ErreurDomaine } from "../domaine/depot";
 import { ajouterJours, depuisMs } from "../regles/dates";
 import type { DateJour } from "../domaine/types";
 import { cleOccurrence, type Occurrence, type Recurrence, type Tache } from "./types";
@@ -14,11 +15,39 @@ export function dateOccurrence(ancre: DateJour, r: Recurrence, n: number): DateJ
   return depuisMs(Date.UTC(annee, mois, Math.min(j, dernier)));
 }
 
-/** Dates d'une récurrence dans [du, au] (bornes incluses). */
+const RE_DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+
+/** Vrai si la valeur est une date calendaire réelle (pas 2026-02-31). */
+export function dateReelle(d: unknown): d is DateJour {
+  if (typeof d !== "string" || !RE_DATE.test(d)) return false;
+  const [a, m, j] = d.split("-").map(Number) as [number, number, number];
+  const t = new Date(Date.UTC(a, m - 1, j));
+  return t.getUTCFullYear() === a && t.getUTCMonth() === m - 1 && t.getUTCDate() === j;
+}
+
+/** Plus petit n (par défaut) à partir duquel parcourir : jamais après la première occurrence >= du. */
+function indiceDepart(ancre: DateJour, r: Recurrence, du: DateJour): number {
+  if (du <= ancre) return 0;
+  const [a, m] = ancre.split("-").map(Number) as [number, number];
+  const [ad, md] = du.split("-").map(Number) as [number, number];
+  const jours = Math.floor((Date.parse(du) - Date.parse(ancre)) / 86_400_000);
+  const brut =
+    r.frequence === "quotidienne"
+      ? jours / r.intervalle
+      : r.frequence === "hebdomadaire"
+        ? jours / (7 * r.intervalle)
+        : ((ad - a) * 12 + (md - m)) / r.intervalle;
+  return Math.max(0, Math.floor(brut) - 1);
+}
+
+/** Dates d'une récurrence dans [du, au] (bornes incluses). Refuse intervalle ou dates invalides. */
 export function datesRecurrence(ancre: DateJour, r: Recurrence, du: DateJour, au: DateJour): DateJour[] {
+  if (!Number.isInteger(r.intervalle) || r.intervalle < 1) throw new ErreurDomaine("Intervalle : entier >= 1");
+  for (const d of [ancre, du, au]) if (!dateReelle(d)) throw new ErreurDomaine(`Date invalide : ${String(d)}`);
+  if (r.fin !== undefined && !dateReelle(r.fin)) throw new ErreurDomaine(`Date invalide : ${String(r.fin)}`);
   const fin = r.fin !== undefined && r.fin < au ? r.fin : au;
   const dates: DateJour[] = [];
-  for (let n = 0; ; n++) {
+  for (let n = indiceDepart(ancre, r, du); ; n++) {
     const d = dateOccurrence(ancre, r, n);
     if (d > fin) break;
     if (d >= du) dates.push(d);

@@ -25,9 +25,16 @@ Le retard de l'autre n'est pas calculé (la fenêtre de l'autre commence à aujo
 
 `DepotTaches.lister()` reste un accès brut pour la couche serveur ; il ne doit jamais être exposé à un client.
 
+## Règle d'écriture
+
+- **Pas de fuite par les écritures** : `enregistrer`, `cocher` et `decocher` renvoient un `AccuseTache` (`id`, et `cle` pour une occurrence), jamais la `Tache` brute (échéance, statut, exceptions révéleraient le retard de l'autre). Seule la couche serveur lit le brut, via `lister`.
+- **Le passé est à l'assigné** : un adulte non assigné ne peut ni cocher ni décocher une occurrence antérieure à aujourd'hui (jour Europe/Paris, horloge `maintenant` du dépôt). Le refus est identique que l'occurrence existe ou non (pas d'oracle). Aujourd'hui, l'avenir et les tâches sans échéance restent ouverts aux deux adultes.
+- **Liste blanche** : `enregistrer` ne retient que `titre`, `assigneId`, `echeance`, `recurrence` (`frequence`, `intervalle`, `fin`) et `enfantId`. `creeParId`, `statut`, `faiteLe`, `exceptions` ne viennent jamais de l'appelant. Passer de ponctuelle à série (ou l'inverse) remet le statut à « a_faire ».
+- **Robustesse** : `cocher`/`decocher` valident `date` (date réelle) ; `datesRecurrence` refuse intervalle non entier >= 1 ou dates invalides et démarre l'itération près de la fenêtre (pas de boucle depuis l'ancre) ; `joursRattrapage` doit être un entier >= 0.
+
 ## Réserves
 
 - Rattrapage des séries : fenêtre `joursRattrapage` (60 jours par défaut, paramètre de l'appel) pour ne pas lister des années d'occurrences non cochées. Une tâche ponctuelle en retard n'est jamais tronquée.
-- Les deux adultes peuvent cocher n'importe quelle tâche visible (pas seulement l'assigné).
+- Les deux adultes peuvent cocher une tâche visible (pas seulement l'assigné), sauf le passé de l'autre (voir Règle d'écriture).
 - Les tâches faites ne sont pas listées dans les vues.
 - Pas d'interface, pas de synchro Google Tasks ici.

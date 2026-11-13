@@ -29,6 +29,7 @@ export async function tachesPourAdulte(
 ): Promise<VueTaches> {
   if (!famille.adultes.some((a) => a.id === adulteId)) throw new ErreurDomaine(`Adulte inconnu : ${adulteId}`);
   const retardMax = options.joursRattrapage ?? 60;
+  if (!Number.isInteger(retardMax) || retardMax < 0) throw new ErreurDomaine("joursRattrapage : entier >= 0");
   const dimanche = ajouterJours(aujourdhui, 7 - jourIso(aujourdhui));
   const debut = ajouterJours(aujourdhui, -retardMax);
 
@@ -55,7 +56,8 @@ export async function tachesPourAdulte(
       continue;
     }
     // Pour l'autre adulte, le passé n'est même pas calculé ; une tâche ponctuelle en retard n'est jamais tronquée.
-    for (const o of developperOccurrences(tache, !miennes ? aujourdhui : tache.recurrence ? debut : "0000-01-01", dimanche)) {
+    const du = miennes ? (tache.recurrence ? debut : "0000-01-01") : aujourdhui;
+    for (const o of developperOccurrences(tache, du, dimanche)) {
       if (o.statut !== "a_faire" || !o.date) continue;
       if (o.date < aujourdhui) brut.aRattraper.push(o);
       else if (o.date === aujourdhui) brut.aujourdhui.push(o);

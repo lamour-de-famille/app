@@ -1,18 +1,11 @@
 import { ErreurDomaine } from "../domaine/depot";
 import type { DateJour, Famille } from "../domaine/types";
-import { datesRecurrence } from "./occurrences";
+import { cleOccurrence } from "./types";
+import { dateReelle, datesRecurrence } from "./occurrences";
 import type { DepotTaches } from "./depot";
-import type { NouvelleTache, Tache } from "./types";
+import type { AccuseTache, NouvelleTache, Tache } from "./types";
 
-const RE_DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
-
-/** Vrai si la valeur est une date calendaire réelle (pas 2026-02-31). */
-export function dateReelle(d: unknown): d is DateJour {
-  if (typeof d !== "string" || !RE_DATE.test(d)) return false;
-  const [a, m, j] = d.split("-").map(Number) as [number, number, number];
-  const t = new Date(Date.UTC(a, m - 1, j));
-  return t.getUTCFullYear() === a && t.getUTCMonth() === m - 1 && t.getUTCDate() === j;
-}
+export { dateReelle };
 
 const copie = <T>(v: T): T => structuredClone(v);
 
@@ -62,16 +55,30 @@ export class DepotTachesMemoire implements DepotTaches {
     return copie([...this.taches.values()]);
   }
 
-  async enregistrer(auteurId: string, nouvelle: NouvelleTache): Promise<Tache> {
+  async enregistrer(auteurId: string, nouvelle: NouvelleTache): Promise<AccuseTache> {
     this.valider(auteurId, nouvelle);
     const existante = nouvelle.id ? this.taches.get(nouvelle.id) : undefined;
     if (nouvelle.id && !existante) throw new ErreurDomaine(`Tâche inconnue : ${nouvelle.id}`);
     const id = nouvelle.id ?? `tache-${++this.compteur}`;
-    const champs = copie({ ...nouvelle, id });
+    // Liste blanche : rien d'autre que ces champs ne vient de l'appelant.
+    const r = nouvelle.recurrence;
+    const champs: Omit<Tache, "statut" | "creeParId"> = {
+      id,
+      titre: nouvelle.titre,
+      assigneId: nouvelle.assigneId,
+      ...(nouvelle.echeance !== undefined ? { echeance: nouvelle.echeance } : {}),
+      ...(r ? { recurrence: { frequence: r.frequence, intervalle: r.intervalle, ...(r.fin !== undefined ? { fin: r.fin } : {}) } } : {}),
+      ...(nouvelle.enfantId !== undefined ? { enfantId: nouvelle.enfantId } : {}),
+    };
     const tache: Tache = existante
       ? { ...existante, ...champs }
       : { ...champs, statut: "a_faire", creeParId: auteurId };
     if (existante) {
+      // Passage ponctuelle <-> série : l'ancien statut n'a plus de sens.
+      if (!!existante.recurrence !== !!tache.recurrence) {
+        tache.statut = "a_faire";
+        delete tache.faiteLe;
+      }
       // Les champs optionnels absents de la saisie sont retirés (remplacement des champs saisis).
       for (const k of ["echeance", "recurrence", "enfantId"] as const) if (!(k in champs)) delete tache[k];
       // Les exceptions qui ne correspondent plus à la série sont écartées.
@@ -79,7 +86,7 @@ export class DepotTachesMemoire implements DepotTaches {
       else if (tache.exceptions) tache.exceptions = tache.exceptions.filter((e) => this.estOccurrence(tache, e.date));
     }
     this.taches.set(id, tache);
-    return copie(tache);
+    return { id };
   }
 
   async supprimer(auteurId: string, id: string): Promise<void> {
@@ -87,10 +94,21 @@ export class DepotTachesMemoire implements DepotTaches {
     if (!this.taches.delete(id)) throw new ErreurDomaine(`Tâche inconnue : ${id}`);
   }
 
-  private modifierStatut(auteurId: string, tacheId: string, date: DateJour | undefined, faite: boolean): Tache {
+  /** Jour courant (fuseau Europe/Paris), au format AAAA-MM-JJ. */
+  private aujourdhui(): DateJour {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(this.maintenant());
+  }
+
+  private modifierStatut(auteurId: string, tacheId: string, date: DateJour | undefined, faite: boolean): AccuseTache {
     this.verifierAdulte(auteurId, "Auteur");
     const t = this.taches.get(tacheId);
     if (!t) throw new ErreurDomaine(`Tâche inconnue : ${tacheId}`);
+    if (date !== undefined && !dateReelle(date)) throw new ErreurDomaine(`Date invalide : ${String(date)}`);
+    // Le passé d'une tâche n'est modifiable que par son assigné ; refus identique que la date existe ou non (pas d'oracle).
+    const visee = t.recurrence ? date : t.echeance;
+    if (t.assigneId !== auteurId && visee !== undefined && visee < this.aujourdhui()) {
+      throw new ErreurDomaine("Occurrence antérieure à aujourd'hui : action réservée à l'adulte assigné");
+    }
     if (t.recurrence) {
       if (date === undefined || !this.estOccurrence(t, date)) throw new ErreurDomaine("Date : occurrence inexistante de la série");
       const autres = (t.exceptions ?? []).filter((e) => e.date !== date);
@@ -102,14 +120,14 @@ export class DepotTachesMemoire implements DepotTaches {
       if (faite) t.faiteLe = this.maintenant().toISOString();
       else delete t.faiteLe;
     }
-    return copie(t);
+    return { id: t.id, ...(date !== undefined ? { cle: cleOccurrence(t.id, date) } : {}) };
   }
 
-  async cocher(auteurId: string, tacheId: string, date?: DateJour): Promise<Tache> {
+  async cocher(auteurId: string, tacheId: string, date?: DateJour): Promise<AccuseTache> {
     return this.modifierStatut(auteurId, tacheId, date, true);
   }
 
-  async decocher(auteurId: string, tacheId: string, date?: DateJour): Promise<Tache> {
+  async decocher(auteurId: string, tacheId: string, date?: DateJour): Promise<AccuseTache> {
     return this.modifierStatut(auteurId, tacheId, date, false);
   }
 }
