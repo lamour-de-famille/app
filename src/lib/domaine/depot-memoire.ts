@@ -3,6 +3,7 @@ import { validerRegle } from "../regles/validation";
 import type { Regle } from "../regles/types";
 import type {
   Creneau,
+  DateJour,
   DemandeEchange,
   EntiteJournal,
   EntreeJournal,
@@ -87,6 +88,16 @@ export class DepotMemoire implements DepotFamille {
     this.verifierDate(garde.date);
     this.verifierAdulte(garde.responsableId);
     this.ecrire(auteurId, "garde", this.gardes, `${garde.enfantId}|${garde.date}`, copie(garde));
+  }
+
+  async supprimerGarde(auteurId: string, enfantId: string, date: DateJour) {
+    this.verifierAdulte(auteurId);
+    this.supprimer(auteurId, "garde", this.gardes, `${enfantId}|${date}`);
+  }
+
+  async supprimerPresence(auteurId: string, enfantId: string, date: DateJour) {
+    this.verifierAdulte(auteurId);
+    this.supprimer(auteurId, "presence", this.presences, `${enfantId}|${date}`);
   }
 
   async listerPresences(f?: FiltrePeriode) {

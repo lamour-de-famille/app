@@ -43,6 +43,8 @@ export interface Garde {
   enfantId: string;
   date: DateJour;
   responsableId: string;
+  /** « regle » : écrite par le moteur (retirée si la règle ne la veut plus) ; absent : saisie à la main. */
+  origine?: "regle";
 }
 
 /** Où l'enfant dort ce soir-là (indépendant de qui est responsable). */
@@ -50,6 +52,8 @@ export interface Presence {
   enfantId: string;
   date: DateJour;
   lieuId: string;
+  /** « regle » : écrite par le moteur (retirée si la règle ne la veut plus) ; absent : saisie à la main. */
+  origine?: "regle";
 }
 
 export interface Transfert {

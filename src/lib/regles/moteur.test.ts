@@ -237,6 +237,41 @@ describe("priorités et chevauchements", () => {
   });
 });
 
+describe("priorité vacances > week-ends (valeurs par défaut des règles fictives)", () => {
+  it("un week-end moins prioritaire ne retire jamais un bloc de vacances entier", () => {
+    const seg = genererSegments([weekEndImpair, weekEndPair, quarts], [grandConge2026], "2026-07");
+    const blocs = seg.filter((s) => s.regleId === "vac-quarts");
+    expect(blocs).toHaveLength(2); // juillet recouvre les deux premiers quarts
+    expect(blocs.every((s) => s.enfantIds.length === 3)).toBe(true);
+    // les week-ends ne subsistent que hors vacances
+    const we = seg.filter((s) => s.regleId.startsWith("we-"));
+    expect(we.every((s) => s.fin.date < "2026-07-04" || s.debut.date > "2026-08-31" || !s.enfantIds.some((e) => ["leo", "mila"].includes(e)))).toBe(true);
+  });
+});
+
+describe("week-ends au passage d'année ISO 53 / 1", () => {
+  it("semaines impaires : 2026-W53 puis 2027-W01 se suivent sans trou ni doublon", () => {
+    const seg = genererSegments([weekEndImpair], [], "2027-01");
+    expect(seg.map((s) => `${s.debut.date}>${s.fin.date}`)).toEqual([
+      "2027-01-01>2027-01-04",
+      "2027-01-08>2027-01-11",
+      "2027-01-22>2027-01-25",
+    ]);
+    expect(semaineIso("2027-01-01")).toBe(53);
+    expect(semaineIso("2027-01-08")).toBe(1);
+  });
+
+  it("semaines paires : le week-end de la semaine 52 est généré, pas celui de la 53", () => {
+    const seg = genererSegments([weekEndPair], [], "2026-12");
+    expect(seg.map((s) => `${s.debut.date}>${s.fin.date}`)).toEqual([
+      "2026-12-12>2026-12-13",
+      "2026-12-26>2026-12-27",
+    ]);
+    const janvier = genererSegments([weekEndPair], [], "2027-01");
+    expect(janvier.map((s) => s.debut.date)).toEqual(["2027-01-16", "2027-01-30"]);
+  });
+});
+
 describe("pureté et sérialisation", () => {
   it("ne modifie pas ses entrées et donne le même résultat après aller-retour JSON", () => {
     const regles: Regle[] = [weekEndPair, weekEndImpair, moities, quarts];

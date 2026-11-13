@@ -127,8 +127,8 @@ describe("application d'un mois", () => {
     ]);
     const presences = await depot.listerPresences({ enfantId: "nina" });
     expect(presences).toEqual([
-      { enfantId: "nina", date: "2026-03-07", lieuId: "dom-sam" },
-      { enfantId: "nina", date: "2026-03-21", lieuId: "dom-sam" },
+      { enfantId: "nina", date: "2026-03-07", lieuId: "dom-sam", origine: "regle" },
+      { enfantId: "nina", date: "2026-03-21", lieuId: "dom-sam", origine: "regle" },
     ]);
     const transferts = await depot.listerTransferts();
     expect(transferts.map((x) => [x.date, x.heure, x.deposeId, x.recupereId, x.lieuId])).toEqual([
@@ -186,6 +186,58 @@ describe("application d'un mois", () => {
     expect(dates).toEqual(["2026-03-01", "2026-03-14", "2026-03-15", "2026-03-28", "2026-03-29"]);
     const tr = await depot.listerTransferts();
     expect(tr.map((x) => x.date)).toEqual(["2026-03-01", "2026-03-14", "2026-03-15", "2026-03-28", "2026-03-29"]);
+  });
+
+  it("désactivation puis changement de parité : plus aucune garde ni présence périmée", async () => {
+    await poser(wePair, suitSam);
+    await appliquerRegles(depot, "alex", "2026-03", []);
+    expect(await depot.listerGardes()).toHaveLength(12);
+    expect(await depot.listerPresences()).toHaveLength(6);
+
+    await depot.enregistrerRegle("alex", { ...wePair, actif: false });
+    const r1 = await appliquerRegles(depot, "alex", "2026-03", []);
+    expect(r1).toMatchObject({ gardesSupprimees: 12, presencesSupprimees: 6 });
+    expect(await depot.listerGardes()).toEqual([]);
+    expect(await depot.listerPresences()).toEqual([]);
+
+    await depot.enregistrerRegle("alex", { ...wePair, actif: true, parite: "impaire" });
+    await appliquerRegles(depot, "alex", "2026-03", []);
+    const g = await depot.listerGardes({ enfantId: "leo" });
+    expect(g.map((x) => x.date)).toEqual(["2026-03-01", "2026-03-14", "2026-03-15", "2026-03-28", "2026-03-29"]);
+    const p = await depot.listerPresences({ enfantId: "leo" });
+    expect(p.map((x) => x.date)).toEqual(["2026-03-14", "2026-03-28"]);
+    // nina suit sam : mêmes jours que la règle corrigée, aucun jour de l'ancienne parité
+    const n = (await depot.listerGardes({ enfantId: "nina" })).map((x) => x.date);
+    expect(n).toEqual(["2026-03-01", "2026-03-14", "2026-03-15", "2026-03-28", "2026-03-29"]);
+  });
+
+  it("ne touche pas aux gardes et présences saisies à la main, ni aux créneaux déplacés", async () => {
+    await poser(wePair);
+    await depot.definirGarde("alex", { enfantId: "leo", date: "2026-03-10", responsableId: "sam" });
+    await depot.definirPresence("alex", { enfantId: "leo", date: "2026-03-10", lieuId: "dom-sam" });
+    // saisie manuelle sur un jour que la règle voudrait aussi (échange accepté)
+    await depot.definirGarde("alex", { enfantId: "leo", date: "2026-03-07", responsableId: "alex" });
+    await appliquerRegles(depot, "alex", "2026-03", []);
+    const id = (await depot.listerCreneaux({ enfantId: "mila" }))[0]!.id;
+    await deplacerCreneau(depot, "alex", id, { fin: "12:00" });
+
+    await depot.supprimerRegle("alex", "we-pair");
+    await appliquerRegles(depot, "alex", "2026-03", []);
+    const restantes = (await depot.listerGardes()).sort((a, b) => a.date.localeCompare(b.date));
+    expect(restantes).toEqual([
+      { enfantId: "leo", date: "2026-03-07", responsableId: "alex" },
+      { enfantId: "leo", date: "2026-03-10", responsableId: "sam" },
+    ]);
+    expect(await depot.listerPresences()).toEqual([{ enfantId: "leo", date: "2026-03-10", lieuId: "dom-sam" }]);
+    expect((await depot.listerCreneaux()).map((c) => c.id)).toEqual([id]);
+  });
+
+  it("n'efface pas les gardes générées d'un autre mois", async () => {
+    await poser(wePair);
+    await appliquerRegles(depot, "alex", "2026-03", []);
+    await depot.supprimerRegle("alex", "we-pair");
+    await appliquerRegles(depot, "alex", "2026-04", []);
+    expect(await depot.listerGardes({ enfantId: "leo" })).toHaveLength(4);
   });
 
   it("vacances : changement de bloc fusionné en un seul transfert, présences par nuit", async () => {

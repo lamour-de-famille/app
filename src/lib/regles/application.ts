@@ -16,6 +16,10 @@ export interface ResultatApplication {
   creneauxSupprimes: number;
   transfertsEcrits: number;
   transfertsSupprimes: number;
+  gardesEcrites: number;
+  gardesSupprimees: number;
+  presencesEcrites: number;
+  presencesSupprimees: number;
 }
 
 const PREFIXE_TRANSFERT = "rg:tr:";
@@ -75,6 +79,10 @@ export async function appliquerRegles(
     creneauxSupprimes: 0,
     transfertsEcrits: 0,
     transfertsSupprimes: 0,
+    gardesEcrites: 0,
+    gardesSupprimees: 0,
+    presencesEcrites: 0,
+    presencesSupprimees: 0,
   };
 
   for (const c of voulus) {
@@ -95,11 +103,40 @@ export async function appliquerRegles(
     }
   }
 
-  for (const g of [...gardes.values()].sort((a, b) => a.date.localeCompare(b.date) || a.enfantId.localeCompare(b.enfantId))) {
-    await depot.definirGarde(auteurId, g);
+  // Gardes et présences : seules celles marquées « regle » sont gérées. Une saisie manuelle
+  // (échange accepté, correction) n'est ni écrasée ni retirée.
+  const cle = (x: { enfantId: string; date: DateJour }) => `${x.enfantId}|${x.date}`;
+  const tri = (a: { date: DateJour; enfantId: string }, b: { date: DateJour; enfantId: string }) =>
+    a.date.localeCompare(b.date) || a.enfantId.localeCompare(b.enfantId);
+  const gardesExistantes = new Map((await depot.listerGardes({ du, au })).map((g) => [cle(g), g]));
+  for (const g of [...gardes.values()].sort(tri)) {
+    const ex = gardesExistantes.get(cle(g));
+    if (ex && ex.origine === undefined) continue;
+    const voulue = { ...g, origine: "regle" as const };
+    if (ex && JSON.stringify(ex) === JSON.stringify(voulue)) continue;
+    await depot.definirGarde(auteurId, voulue);
+    r.gardesEcrites++;
   }
-  for (const p of [...presences.values()].sort((a, b) => a.date.localeCompare(b.date) || a.enfantId.localeCompare(b.enfantId))) {
-    await depot.definirPresence(auteurId, p);
+  for (const ex of [...gardesExistantes.values()].sort(tri)) {
+    if (ex.origine === "regle" && !gardes.has(cle(ex))) {
+      await depot.supprimerGarde(auteurId, ex.enfantId, ex.date);
+      r.gardesSupprimees++;
+    }
+  }
+  const presencesExistantes = new Map((await depot.listerPresences({ du, au })).map((p) => [cle(p), p]));
+  for (const p of [...presences.values()].sort(tri)) {
+    const ex = presencesExistantes.get(cle(p));
+    if (ex && ex.origine === undefined) continue;
+    const voulue = { ...p, origine: "regle" as const };
+    if (ex && JSON.stringify(ex) === JSON.stringify(voulue)) continue;
+    await depot.definirPresence(auteurId, voulue);
+    r.presencesEcrites++;
+  }
+  for (const ex of [...presencesExistantes.values()].sort(tri)) {
+    if (ex.origine === "regle" && !presences.has(cle(ex))) {
+      await depot.supprimerPresence(auteurId, ex.enfantId, ex.date);
+      r.presencesSupprimees++;
+    }
   }
 
   const existantsParId = new Map(transfertsExistants.map((t) => [t.id, t]));

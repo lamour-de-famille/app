@@ -38,4 +38,4 @@ export const bornesMois = (mois: string): { du: DateJour; au: DateJour } => {
 };
 
 export const sansAccent = (s: string): string =>
-  s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
