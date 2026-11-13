@@ -1,0 +1,13 @@
+:root {
+  --texte: #1d1b26;
+  --texte-secondaire: #4a4757;
+  --carte: #ffffff;
+  --rayon-carte: 24px;
+}
+body {
+  margin: 0;
+  color: var(--texte);
+  font-family: Inter, system-ui, sans-serif;
+  min-height: 100vh;
+  background: linear-gradient(160deg, #fff0f6 0%, #ffe4ee 100%);
+}
