@@ -7,3 +7,6 @@ Une ligne par décision prise sans réponse explicite : date, rôle, question, c
 - 2026-11-13 · capitaine · Liste des adresses autorisées : base ou variable ? · variable d'environnement `ALLOWED_EMAILS` · plus simple, ADR 0002.
 - 2026-11-13 · capitaine · Next.js sans `src/` plat ? · dossier `src/` avec alias `@/` · sépare code et configuration.
 - 2026-11-13 · capitaine · `NODE_ENV=production` présent dans l'environnement : conséquence ? · `.npmrc` avec `include=dev` · sinon les outils de développement ne s'installent pas.
+- 2026-11-13 · equipier-interface · Quelles couleurs pour les enfants fictifs ? · Léo bleu (tristesse), Mila rose (amour), Nina vert (calme) ; texte de pastille foncé ou blanc choisi selon le contraste · palette imposée, contraste testé.
+- 2026-11-13 · equipier-interface · États de pastille sans couleur seule ? · plein + coche (rond), contour + point (rond), gris + tiret (carré arrondi pointillé), plus libellé accessible · ne pas dépendre de la couleur.
+- 2026-11-13 · equipier-interface · Polices sans réseau au build ? · paquets `@fontsource-variable` (Inter, Bricolage Grotesque) importés dans le layout · pas de next/font/google.
