@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next";
+import "@fontsource-variable/inter";
+import "@fontsource-variable/bricolage-grotesque";
 import "./globals.css";
+import { NavigationBasse } from "@/components/NavigationBasse";
 
 export const metadata: Metadata = {
   title: "L'amour de famille",
@@ -12,7 +15,10 @@ export const viewport: Viewport = { themeColor: "#FFE4EE" };
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr">
-      <body>{children}</body>
+      <body>
+        {children}
+        <NavigationBasse />
+      </body>
     </html>
   );
 }
