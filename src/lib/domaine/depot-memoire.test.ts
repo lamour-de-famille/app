@@ -136,7 +136,7 @@ describe("journal et événements à notifier", () => {
     expect(await depot.lireJournal()).toEqual([]);
     await depot.definirGarde("alex", { enfantId: "leo", date: "2026-03-10", responsableId: "alex" });
     const ev = (await depot.evenementsANotifier("sam"))[0]!;
-    await depot.marquerNotifie(ev.id);
+    await depot.marquerNotifie("sam", ev.id);
     expect(await depot.evenementsANotifier("sam")).toEqual([]);
   });
 });
