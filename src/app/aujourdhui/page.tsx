@@ -1,12 +1,11 @@
 import { Carte } from "@/components/Carte";
 import { ListeAffaires } from "@/components/ListeAffaires";
 import { PastilleEnfant } from "@/components/PastilleEnfant";
-import { chargerAujourdhui, depotDemonstration } from "@/lib/vues/chargeur";
-import { notFound } from "next/navigation";
+import { obtenirDepot } from "@/lib/acces/depot";
+import { exigerAdulte } from "@/lib/acces/serveur";
+import { chargerAujourdhui } from "@/lib/vues/chargeur";
 
 export const dynamic = "force-dynamic";
-
-const ADULTES_DEMO = ["alex", "sam"];
 
 function aujourdhuiLocal(): string {
   const d = new Date();
@@ -19,16 +18,12 @@ const formatDate = (iso: string) =>
     new Date(`${iso}T12:00:00Z`),
   );
 
-/**
- * Tant que l'authentification réelle n'est pas branchée, l'adulte connecté est une doublure :
- * paramètre `?adulte=alex|sam`. Sans authentification ni dépôt réel, la production n'affiche rien.
- */
+/** Page protégée : l'adulte vient de la session (`?adulte=` uniquement en mode démonstration). */
 export default async function Aujourdhui({ searchParams }: { searchParams: Promise<{ adulte?: string }> }) {
-  if (process.env.NODE_ENV === "production") notFound();
   const { adulte } = await searchParams;
-  const adulteId = adulte && ADULTES_DEMO.includes(adulte) ? adulte : "alex";
   const date = aujourdhuiLocal();
-  const vue = await chargerAujourdhui(await depotDemonstration(date), adulteId, date);
+  const { adulteId } = await exigerAdulte(date, adulte);
+  const vue = await chargerAujourdhui(await obtenirDepot(date), adulteId, date);
   const t = vue.prochainTransfert;
 
   return (
