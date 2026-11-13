@@ -99,6 +99,7 @@ h3 {
   border-top-left-radius: var(--rayon-carte);
   border-top-right-radius: var(--rayon-carte);
   box-shadow: 0 -2px 12px rgb(29 27 38 / 0.1);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 .nav-basse ul {
   display: flex;
@@ -125,4 +126,47 @@ h3 {
   background: var(--fond-bas);
   text-decoration: underline;
   text-underline-offset: 4px;
+}
+.discret {
+  color: var(--texte-secondaire);
+}
+.carte + .carte {
+  margin-top: 1rem;
+}
+.enfants,
+.affaires {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.enfants li {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.5rem 0;
+}
+.transfert {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0;
+}
+.transfert dt {
+  color: var(--texte-secondaire);
+}
+.transfert dd {
+  margin: 0;
+}
+.affaires label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: var(--cible-min);
+  cursor: pointer;
+}
+.affaires input[type="checkbox"] {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
+  accent-color: var(--texte);
 }
