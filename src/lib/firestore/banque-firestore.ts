@@ -1,11 +1,11 @@
 import type { Firestore } from "@google-cloud/firestore";
-import { comparerIds, nettoyer, type Banque, type Donnees, type TransactionBanque } from "./banque";
+import { comparerIds, nettoyer, type Banque, type Donnees, type OptionsTransaction, type TransactionBanque } from "./banque";
 
 /** Adaptateur Firestore (SDK `@google-cloud/firestore`) de la banque. */
 export class BanqueFirestore implements Banque {
   constructor(private readonly db: Firestore) {}
 
-  transaction<T>(travail: (tx: TransactionBanque) => Promise<T>): Promise<T> {
+  transaction<T>(travail: (tx: TransactionBanque) => Promise<T>, options: OptionsTransaction = {}): Promise<T> {
     return this.db.runTransaction(async (t) => {
       const tx: TransactionBanque = {
         lire: async (collection, id) => {
@@ -24,7 +24,7 @@ export class BanqueFirestore implements Banque {
         },
       };
       return travail(tx);
-    });
+    }, options.lectureSeule ? { readOnly: true } : undefined);
   }
 }
 

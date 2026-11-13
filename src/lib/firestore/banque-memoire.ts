@@ -1,12 +1,12 @@
-import { comparerIds, nettoyer, type Banque, type Donnees, type TransactionBanque } from "./banque";
+import { comparerIds, nettoyer, type Banque, type Donnees, type OptionsTransaction, type TransactionBanque } from "./banque";
 
 /** Banque en mémoire : double de test de Firestore (transactions sérialisées, écritures tout ou rien). */
 export class BanqueMemoire implements Banque {
   private readonly collections = new Map<string, Map<string, Donnees>>();
   private file: Promise<unknown> = Promise.resolve();
 
-  transaction<T>(travail: (tx: TransactionBanque) => Promise<T>): Promise<T> {
-    const suite = this.file.then(() => this.executer(travail));
+  transaction<T>(travail: (tx: TransactionBanque) => Promise<T>, options: OptionsTransaction = {}): Promise<T> {
+    const suite = this.file.then(() => this.executer(travail, options.lectureSeule === true));
     this.file = suite.catch(() => undefined);
     return suite;
   }
@@ -16,7 +16,7 @@ export class BanqueMemoire implements Banque {
     return [...this.collections.values()].reduce((n, c) => n + c.size, 0);
   }
 
-  private async executer<T>(travail: (tx: TransactionBanque) => Promise<T>): Promise<T> {
+  private async executer<T>(travail: (tx: TransactionBanque) => Promise<T>, lectureSeule: boolean): Promise<T> {
     const ecritures: Array<() => void> = [];
     const collection = (nom: string) => this.collections.get(nom) ?? new Map<string, Donnees>();
     const tx: TransactionBanque = {
@@ -32,10 +32,12 @@ export class BanqueMemoire implements Banque {
           .map(([id, donnees]) => ({ id, donnees: nettoyer(donnees) }));
       },
       ecrire: (nom, id, donnees) => {
+        if (lectureSeule) throw new Error("Écriture dans une transaction en lecture seule");
         const copie = nettoyer(donnees);
         ecritures.push(() => this.cible(nom).set(id, copie));
       },
       supprimer: (nom, id) => {
+        if (lectureSeule) throw new Error("Suppression dans une transaction en lecture seule");
         ecritures.push(() => this.cible(nom).delete(id));
       },
     };

@@ -62,6 +62,13 @@ export interface EtatDepot {
 export type NomCollection = keyof EtatDepot;
 
 const copie = <T>(v: T): T => structuredClone(v);
+/**
+ * Valeurs d'une collection triées par clé (id, ou « enfant|date »), en comparant les unités de code :
+ * même ordre que Firestore et indépendant de l'ordre d'insertion. Le journal et les événements restent,
+ * eux, dans l'ordre chronologique.
+ */
+const parCle = <T>(m: Map<string, T>): T[] =>
+  [...m].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, v]) => v);
 const dansPeriode = (date: string, f?: FiltrePeriode) =>
   (!f?.du || date >= f.du) && (!f?.au || date <= f.au);
 
@@ -105,7 +112,11 @@ export class DepotMemoire implements DepotFamille {
     };
   }
 
-  /** Remplace l'état (l'ordre du journal et des événements suit celui de l'objet). */
+  /**
+   * Remplace l'état. L'ordre du journal et des événements suit celui de l'objet : leurs ids (« jn-… »,
+   * « ev-… », jamais entiers) doivent donc être triables dans l'ordre chronologique, car `Object.entries`
+   * placerait en tête des clés entières.
+   */
   restaurerEtat(etat: Partial<EtatDepot>) {
     const map = <T>(o: Record<string, T> | undefined) => new Map(Object.entries(copie(o ?? {})));
     this.gardes = map(etat.gardes);
@@ -123,7 +134,7 @@ export class DepotMemoire implements DepotFamille {
   }
 
   async listerGardes(f?: FiltrePeriode) {
-    return [...this.gardes.values()]
+    return parCle(this.gardes)
       .filter((g) => (!f?.enfantId || g.enfantId === f.enfantId) && dansPeriode(g.date, f))
       .map(copie);
   }
@@ -147,7 +158,7 @@ export class DepotMemoire implements DepotFamille {
   }
 
   async listerPresences(f?: FiltrePeriode) {
-    return [...this.presences.values()]
+    return parCle(this.presences)
       .filter((p) => (!f?.enfantId || p.enfantId === f.enfantId) && dansPeriode(p.date, f))
       .map(copie);
   }
@@ -161,7 +172,7 @@ export class DepotMemoire implements DepotFamille {
   }
 
   async listerTransferts(f?: Omit<FiltrePeriode, "enfantId">) {
-    return [...this.transferts.values()].filter((t) => dansPeriode(t.date, f)).map(copie);
+    return parCle(this.transferts).filter((t) => dansPeriode(t.date, f)).map(copie);
   }
 
   async enregistrerTransfert(auteurId: string, t: Omit<Transfert, "id"> & { id?: string }) {
@@ -184,7 +195,7 @@ export class DepotMemoire implements DepotFamille {
   }
 
   async listerCreneaux(f?: FiltrePeriode) {
-    return [...this.creneaux.values()]
+    return parCle(this.creneaux)
       .filter((c) => (!f?.enfantId || c.enfantId === f.enfantId) && dansPeriode(c.date, f))
       .map(copie);
   }
@@ -206,7 +217,7 @@ export class DepotMemoire implements DepotFamille {
   }
 
   async listerDemandes() {
-    return [...this.demandes.values()].map(copie);
+    return parCle(this.demandes).map(copie);
   }
 
   async proposerEchange(auteurId: string, d: NouvelleDemande) {
@@ -262,7 +273,7 @@ export class DepotMemoire implements DepotFamille {
   }
 
   async listerRegles() {
-    return [...this.regles.values()].map(copie);
+    return parCle(this.regles).map(copie);
   }
 
   async enregistrerRegle(auteurId: string, regle: Regle) {
@@ -291,7 +302,7 @@ export class DepotMemoire implements DepotFamille {
   }
 
   private dependantesDe(id: string) {
-    return [...this.regles.values()].filter((r) => r.type === "derivee" && r.sourceId === id);
+    return parCle(this.regles).filter((r) => r.type === "derivee" && r.sourceId === id);
   }
 
   async lireJournal() {

@@ -1,7 +1,32 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { ErreurDomaine, type DepotFamille } from "./depot";
 import { familleFictive } from "./fixture-famille";
+import type { RegleDerivee, RegleWeekEnd } from "../regles/types";
 import type { Famille } from "./types";
+
+const regleWeekEnd = (id: string): RegleWeekEnd => ({
+  id,
+  type: "week_end",
+  libelle: `Week-end fictif ${id}`,
+  actif: true,
+  priorite: 1,
+  parite: "paire",
+  responsableId: "alex",
+  enfantIds: ["leo", "mila"],
+  debut: { jour: 5, heure: "18:00" },
+  fin: { jour: 7, heure: "19:00" },
+});
+
+const regleDerivee = (id: string, sourceId: string): RegleDerivee => ({
+  id,
+  type: "derivee",
+  libelle: `Dérivée fictive ${id}`,
+  actif: true,
+  priorite: 2,
+  sourceId,
+  suitAdulteId: "sam",
+  enfantIds: ["nina"],
+});
 
 /** Crée un dépôt vierge pour cette famille, avec l'horloge fournie. */
 export type FabriqueDepot = (famille: Famille, maintenant: () => Date) => Promise<DepotFamille>;
@@ -100,7 +125,7 @@ export function suiteContratDepot(creer: FabriqueDepot) {
       expect(await depot.listerTransferts()).toEqual([]);
       const j = await depot.lireJournal();
       expect(j.at(-1)).toMatchObject({ action: "suppression", entite: "transfert" });
-    expect(j.at(-1)?.apres).toBeUndefined();
+      expect(j.at(-1)?.apres).toBeUndefined();
       await expect(depot.supprimerTransfert("sam", tr.id)).rejects.toThrow(ErreurDomaine);
     });
   });
@@ -278,6 +303,111 @@ export function suiteContratDepot(creer: FabriqueDepot) {
       const l = await depot.listerCreneaux();
       expect(l).toHaveLength(1);
       expect(l[0]!.libelle).toBe("Modifié");
+    });
+  });
+
+  describe("ordre des listes : tri par id", () => {
+    const creneau = { enfantId: "leo", date: "2026-03-14", debut: "09:00", fin: "10:00", libelle: "Test" };
+    const transfert = { date: "2026-03-13", heure: "08:15", lieuId: "parc", deposeId: "sam", recupereId: "alex", enfantIds: ["nina"] };
+
+    it("trie créneaux et transferts par id, y compris les ids numériques (ordre des unités de code)", async () => {
+      const ids = ["b", "10", "a", "2", "9", "B"];
+      for (const id of ids) {
+        await depot.enregistrerCreneau("alex", { ...creneau, id });
+        await depot.enregistrerTransfert("alex", { ...transfert, id });
+      }
+      const attendu = ["10", "2", "9", "B", "a", "b"];
+      expect((await depot.listerCreneaux()).map((c) => c.id)).toEqual(attendu);
+      expect((await depot.listerTransferts()).map((t) => t.id)).toEqual(attendu);
+    });
+
+    it("trie gardes et présences par clé « enfant|date », quel que soit l'ordre d'écriture", async () => {
+      for (const [enfantId, date] of [["nina", "2026-03-11"], ["leo", "2026-03-12"], ["leo", "2026-03-10"], ["mila", "2026-03-10"]] as const) {
+        await depot.definirGarde("alex", { enfantId, date, responsableId: "alex" });
+        await depot.definirPresence("alex", { enfantId, date, lieuId: "dom-alex" });
+      }
+      const attendu = ["leo|2026-03-10", "leo|2026-03-12", "mila|2026-03-10", "nina|2026-03-11"];
+      expect((await depot.listerGardes()).map((g) => `${g.enfantId}|${g.date}`)).toEqual(attendu);
+      expect((await depot.listerPresences()).map((p) => `${p.enfantId}|${p.date}`)).toEqual(attendu);
+    });
+
+    it("trie règles et demandes par id ; le journal reste chronologique", async () => {
+      for (const id of ["r-b", "r-10", "r-2", "r-a"]) await depot.enregistrerRegle("alex", regleWeekEnd(id));
+      expect((await depot.listerRegles()).map((r) => r.id)).toEqual(["r-10", "r-2", "r-a", "r-b"]);
+      for (const jour of ["2026-04-03", "2026-04-04", "2026-04-05"]) {
+        await depot.proposerEchange("sam", { responsableId: "sam", enfantIds: ["leo"], jours: [jour] });
+      }
+      const idsDemandes = (await depot.listerDemandes()).map((d) => d.id);
+      expect(idsDemandes).toEqual([...idsDemandes].sort());
+      const journal = await depot.lireJournal();
+      expect(journal.map((e) => e.cle).slice(0, 4)).toEqual(["r-b", "r-10", "r-2", "r-a"]);
+    });
+  });
+
+  describe("règles", () => {
+    it("enregistre, remplace et supprime une règle, avec trace au journal", async () => {
+      const r = await depot.enregistrerRegle("alex", regleWeekEnd("we-1"));
+      expect(r).toEqual(regleWeekEnd("we-1"));
+      await depot.enregistrerRegle("alex", { ...regleWeekEnd("we-1"), priorite: 7 });
+      const l = await depot.listerRegles();
+      expect(l).toHaveLength(1);
+      expect(l[0]!.priorite).toBe(7);
+      await depot.supprimerRegle("sam", "we-1");
+      expect(await depot.listerRegles()).toEqual([]);
+      const j = await depot.lireJournal();
+      expect(j.map((e) => [e.entite, e.action])).toEqual([
+        ["regle", "creation"],
+        ["regle", "modification"],
+        ["regle", "suppression"],
+      ]);
+      expect(j[2]!.apres).toBeUndefined();
+      await expect(depot.supprimerRegle("sam", "we-1")).rejects.toThrow(ErreurDomaine);
+    });
+
+    it("rejette une règle invalide ou d'un adulte inconnu, sans rien tracer", async () => {
+      await expect(depot.enregistrerRegle("intrus", regleWeekEnd("we-1"))).rejects.toThrow(ErreurDomaine);
+      await expect(
+        depot.enregistrerRegle("alex", { ...regleWeekEnd("we-1"), responsableId: "inconnu" }),
+      ).rejects.toThrow(ErreurDomaine);
+      await expect(depot.enregistrerRegle("alex", { ...regleWeekEnd("we-1"), enfantIds: [] })).rejects.toThrow(ErreurDomaine);
+      expect(await depot.listerRegles()).toEqual([]);
+      expect(await depot.lireJournal()).toEqual([]);
+    });
+
+    it("accepte une règle dérivée d'une règle source, et refuse source inconnue, auto-référence ou chaîne de dérivées", async () => {
+      await depot.enregistrerRegle("alex", regleWeekEnd("we-1"));
+      const d = await depot.enregistrerRegle("alex", regleDerivee("der-1", "we-1"));
+      expect(d).toMatchObject({ type: "derivee", sourceId: "we-1" });
+      await expect(depot.enregistrerRegle("alex", regleDerivee("der-2", "absente"))).rejects.toThrow(/source inconnue/);
+      await expect(depot.enregistrerRegle("alex", regleDerivee("der-3", "der-3"))).rejects.toThrow(ErreurDomaine);
+      await expect(depot.enregistrerRegle("alex", regleDerivee("der-4", "der-1"))).rejects.toThrow(/autre dérivée/);
+      expect((await depot.listerRegles()).map((r) => r.id)).toEqual(["der-1", "we-1"]);
+    });
+
+    it("refuse de supprimer une règle dont d'autres dépendent, puis l'autorise une fois la dérivée supprimée", async () => {
+      await depot.enregistrerRegle("alex", regleWeekEnd("we-1"));
+      await depot.enregistrerRegle("alex", regleDerivee("der-1", "we-1"));
+      await expect(depot.supprimerRegle("alex", "we-1")).rejects.toThrow(/der-1/);
+      expect(await depot.listerRegles()).toHaveLength(2);
+      const nbJournal = (await depot.lireJournal()).length;
+      await depot.supprimerRegle("alex", "der-1");
+      await depot.supprimerRegle("alex", "we-1");
+      expect(await depot.listerRegles()).toEqual([]);
+      expect(await depot.lireJournal()).toHaveLength(nbJournal + 2);
+    });
+
+    it("refuse qu'une règle dont d'autres dépendent devienne dérivée", async () => {
+      await depot.enregistrerRegle("alex", regleWeekEnd("we-1"));
+      await depot.enregistrerRegle("alex", regleWeekEnd("we-2"));
+      await depot.enregistrerRegle("alex", regleDerivee("der-1", "we-1"));
+      await expect(depot.enregistrerRegle("alex", regleDerivee("we-1", "we-2"))).rejects.toThrow(/dépendent/);
+      expect((await depot.listerRegles()).find((r) => r.id === "we-1")?.type).toBe("week_end");
+    });
+
+    it("notifie l'autre adulte d'un changement de règle", async () => {
+      await depot.enregistrerRegle("alex", regleWeekEnd("we-1"));
+      expect(await depot.evenementsANotifier("sam")).toHaveLength(1);
+      expect(await depot.evenementsANotifier("alex")).toHaveLength(0);
     });
   });
 

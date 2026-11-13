@@ -42,16 +42,28 @@ export class DepotFirestore implements DepotFamille {
     private readonly familleId: string,
     private readonly options: OptionsDepotFirestore = {},
   ) {
+    if (!idDocumentValide(familleId)) throw new ErreurDomaine(`Identifiant de famille invalide : ${familleId}`);
     this.genererId = options.genererId ?? idUnique();
   }
 
-  /** Crée ou remplace le document de la famille (amorçage). Validée comme à la construction d'un dépôt. */
+  /**
+   * Crée le document de la famille (amorçage), validée comme à la construction d'un dépôt.
+   * Refuse d'écraser une famille existante : ses gardes et son journal en dépendent.
+   */
   async initialiserFamille(famille: Famille) {
     new DepotMemoire({ ...famille, id: this.familleId });
-    await this.banque.transaction(async (tx) => tx.ecrire("familles", this.familleId, { ...famille, id: this.familleId }));
+    await this.banque.transaction(async (tx) => {
+      if (await tx.lire("familles", this.familleId)) throw new ErreurDomaine(`Famille déjà initialisée : ${this.familleId}`);
+      tx.ecrire("familles", this.familleId, { ...famille, id: this.familleId });
+    });
   }
 
-  private async executer<T>(charger: NomCollection[], travail: (d: DepotMemoire) => Promise<T>): Promise<T> {
+  /** Lecture pure : transaction en lecture seule, aucune écriture possible. */
+  private lire<T>(charger: NomCollection[], travail: (d: DepotMemoire) => Promise<T>): Promise<T> {
+    return this.executer(charger, travail, true);
+  }
+
+  private async executer<T>(charger: NomCollection[], travail: (d: DepotMemoire) => Promise<T>, lectureSeule = false): Promise<T> {
     return this.banque.transaction(async (tx) => {
       const doc = await tx.lire("familles", this.familleId);
       if (!doc) throw new ErreurDomaine(`Famille introuvable : ${this.familleId}`);
@@ -66,6 +78,7 @@ export class DepotFirestore implements DepotFamille {
       });
       depot.restaurerEtat(avant);
       const resultat = await travail(depot);
+      if (lectureSeule) return resultat;
       const apres = depot.exporterEtat();
       for (const nom of TOUTES) {
         const ancien = (avant[nom] ?? {}) as Record<string, unknown>;
@@ -79,15 +92,15 @@ export class DepotFirestore implements DepotFamille {
         for (const id of Object.keys(ancien)) if (!(id in nouveau)) tx.supprimer(chemin, id);
       }
       return resultat;
-    });
+    }, { lectureSeule });
   }
 
   lireFamille() {
-    return this.executer([], (d) => d.lireFamille());
+    return this.lire([], (d) => d.lireFamille());
   }
 
   listerGardes(f?: FiltrePeriode) {
-    return this.executer(["gardes"], (d) => d.listerGardes(f));
+    return this.lire(["gardes"], (d) => d.listerGardes(f));
   }
   definirGarde(auteurId: string, garde: Garde) {
     return this.executer(["gardes"], (d) => d.definirGarde(auteurId, garde));
@@ -97,7 +110,7 @@ export class DepotFirestore implements DepotFamille {
   }
 
   listerPresences(f?: FiltrePeriode) {
-    return this.executer(["presences"], (d) => d.listerPresences(f));
+    return this.lire(["presences"], (d) => d.listerPresences(f));
   }
   definirPresence(auteurId: string, presence: Presence) {
     return this.executer(["presences"], (d) => d.definirPresence(auteurId, presence));
@@ -107,7 +120,7 @@ export class DepotFirestore implements DepotFamille {
   }
 
   listerTransferts(f?: Omit<FiltrePeriode, "enfantId">) {
-    return this.executer(["transferts"], (d) => d.listerTransferts(f));
+    return this.lire(["transferts"], (d) => d.listerTransferts(f));
   }
   enregistrerTransfert(auteurId: string, t: Omit<Transfert, "id"> & { id?: string }) {
     return this.executer(["transferts"], (d) => d.enregistrerTransfert(auteurId, t));
@@ -117,7 +130,7 @@ export class DepotFirestore implements DepotFamille {
   }
 
   listerCreneaux(f?: FiltrePeriode) {
-    return this.executer(["creneaux"], (d) => d.listerCreneaux(f));
+    return this.lire(["creneaux"], (d) => d.listerCreneaux(f));
   }
   enregistrerCreneau(auteurId: string, c: Omit<Creneau, "id"> & { id?: string }) {
     return this.executer(["creneaux"], (d) => d.enregistrerCreneau(auteurId, c));
@@ -127,7 +140,7 @@ export class DepotFirestore implements DepotFamille {
   }
 
   listerDemandes() {
-    return this.executer(["demandes"], (d) => d.listerDemandes());
+    return this.lire(["demandes"], (d) => d.listerDemandes());
   }
   proposerEchange(auteurId: string, demande: NouvelleDemande) {
     return this.executer(["demandes"], (d) => d.proposerEchange(auteurId, demande));
@@ -137,7 +150,7 @@ export class DepotFirestore implements DepotFamille {
   }
 
   listerRegles() {
-    return this.executer(["regles"], (d) => d.listerRegles());
+    return this.lire(["regles"], (d) => d.listerRegles());
   }
   enregistrerRegle(auteurId: string, regle: Regle) {
     return this.executer(["regles"], (d) => d.enregistrerRegle(auteurId, regle));
@@ -147,10 +160,10 @@ export class DepotFirestore implements DepotFamille {
   }
 
   lireJournal() {
-    return this.executer(["journal"], (d) => d.lireJournal());
+    return this.lire(["journal"], (d) => d.lireJournal());
   }
   evenementsANotifier(destinataireId: string) {
-    return this.executer(["evenements"], (d) => d.evenementsANotifier(destinataireId));
+    return this.lire(["evenements"], (d) => d.evenementsANotifier(destinataireId));
   }
   marquerNotifie(destinataireId: string, evenementId: string) {
     return this.executer(["evenements"], (d) => d.marquerNotifie(destinataireId, evenementId));

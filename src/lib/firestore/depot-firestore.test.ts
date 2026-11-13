@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ErreurDomaine } from "../domaine/depot";
 import { suiteContratDepot } from "../domaine/depot-contrat";
 import { familleFictive } from "../domaine/fixture-famille";
@@ -75,6 +75,37 @@ describe("DepotFirestore : spécifique", () => {
     await expect(depot.listerGardes()).rejects.toThrow(/introuvable/);
     const a = familleFictive.adultes[0];
     await expect(depot.initialiserFamille({ ...familleFictive, adultes: [a, a] })).rejects.toThrow(ErreurDomaine);
+  });
+
+  it("refuse un identifiant de famille impropre à la construction", () => {
+    for (const id of ["", "a/b", ".", "..", "__x__"]) {
+      expect(() => new DepotFirestore(new BanqueMemoire(), id)).toThrow(ErreurDomaine);
+    }
+  });
+
+  it("n'initialise une famille qu'une fois (pas d'écrasement)", async () => {
+    const { depot } = await nouveau();
+    await depot.definirGarde("alex", { enfantId: "leo", date: "2026-03-10", responsableId: "alex" });
+    await expect(depot.initialiserFamille(familleFictive)).rejects.toThrow(/déjà initialisée/);
+    expect(await depot.listerGardes()).toHaveLength(1);
+  });
+
+  it("les lectures n'écrivent rien (transaction en lecture seule)", async () => {
+    const { banque, depot } = await nouveau();
+    const ecritures = vi.spyOn(banque, "transaction");
+    await depot.listerGardes();
+    await depot.lireJournal();
+    expect(ecritures.mock.calls.every(([, options]) => options?.lectureSeule === true)).toBe(true);
+    await depot.definirGarde("alex", { enfantId: "leo", date: "2026-03-10", responsableId: "alex" });
+    expect(ecritures.mock.calls.at(-1)?.[1]?.lectureSeule).toBe(false);
+  });
+
+  it("la banque en mémoire refuse toute écriture en lecture seule", async () => {
+    const banque = new BanqueMemoire();
+    await expect(
+      banque.transaction(async (tx) => tx.ecrire("c", "x", { a: 1 }), { lectureSeule: true }),
+    ).rejects.toThrow(/lecture seule/);
+    expect(banque.compter()).toBe(0);
   });
 
   it("relit le journal dans l'ordre des écritures", async () => {
