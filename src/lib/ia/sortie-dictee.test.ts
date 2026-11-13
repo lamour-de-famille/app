@@ -75,7 +75,7 @@ describe("vérification croisée avec la famille", () => {
     const mauvais = {
       ...valide,
       taches: [{ titre: "x", assigneId: "leo", enfantId: "alex" }],
-      rendezVous: [{ titre: "y", debut: "2026-11-20T14:00", enfantIds: ["leo", "zoe"] }],
+      rendezVous: [{ titre: "y", debut: "2026-11-20T14:00", enfantIds: ["leo", "inconnu"] }],
       notes: [{ texte: "z", enfantId: "inconnu" }],
     };
     let msg = "";
@@ -84,12 +84,12 @@ describe("vérification croisée avec la famille", () => {
     } catch (e) {
       msg = (e as Error).message;
     }
-    for (const attendu of ["taches[0].assigneId", "taches[0].enfantId", "rendezVous[0].enfantIds « zoe »", "notes[0].enfantId"]) expect(msg).toContain(attendu);
+    for (const attendu of ["taches[0].assigneId", "taches[0].enfantId", "rendezVous[0].enfantIds « inconnu »", "notes[0].enfantId"]) expect(msg).toContain(attendu);
   });
 
   it("sortieDicteeSure ne renvoie rien d'utilisable si invalide", () => {
     expect(sortieDicteeSure(JSON.stringify(valide), familleFictive)).toEqual(valide);
-    expect(() => sortieDicteeSure(JSON.stringify({ ...valide, notes: [{ texte: "x", enfantId: "zoe" }] }), familleFictive)).toThrow(SortieDicteeInvalide);
+    expect(() => sortieDicteeSure(JSON.stringify({ ...valide, notes: [{ texte: "x", enfantId: "inconnu" }] }), familleFictive)).toThrow(SortieDicteeInvalide);
   });
 });
 

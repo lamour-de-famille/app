@@ -57,7 +57,7 @@ describe("appliquerMotif", () => {
     ["fin avant début", motifAAB, "2026-03-03", "2026-03-02"],
     ["date impossible", motifAAB, "2026-02-30", "2026-03-02"],
     ["plage trop longue", motifAAB, "2026-01-01", "2027-06-01"],
-    ["adulte inconnu au 3e jour", [motifAAB[0]!, motifAAB[1]!, { responsableId: "zoe", lieuId: "parc" }], "2026-03-02", "2026-03-05"],
+    ["adulte inconnu au 3e jour", [motifAAB[0]!, motifAAB[1]!, { responsableId: "inconnu", lieuId: "parc" }], "2026-03-02", "2026-03-05"],
     ["lieu inconnu au 2e jour", [motifAAB[0]!, { responsableId: "sam", lieuId: "lune" }], "2026-03-02", "2026-03-05"],
   ])("refuse sans rien écrire : %s", async (_n, motif, debut, fin) => {
     await expect(appliquerMotif(depot, "alex", motif, debut, fin)).rejects.toBeInstanceOf(ErreurDomaine);
@@ -66,7 +66,7 @@ describe("appliquerMotif", () => {
   });
 
   it("refuse un auteur ou un enfant inconnu", async () => {
-    await expect(appliquerMotif(depot, "zoe", motifAAB, "2026-03-02", "2026-03-03")).rejects.toThrow(/Adulte/);
+    await expect(appliquerMotif(depot, "inconnu", motifAAB, "2026-03-02", "2026-03-03")).rejects.toThrow(/Adulte/);
     await expect(appliquerMotif(depot, "alex", motifAAB, "2026-03-02", "2026-03-03", ["max"])).rejects.toThrow(/Enfant/);
   });
 });
@@ -117,7 +117,7 @@ describe("dupliquerSemaine", () => {
     await expect(dupliquerSemaine(depot, "alex", "2026-03-02", "2026-03-17")).rejects.toThrow(/lundi/);
     await expect(dupliquerSemaine(depot, "alex", "2026-03-02", "2026-03-02")).rejects.toThrow(/identiques/);
     await expect(dupliquerSemaine(depot, "alex", "2026-06-01", "2026-06-08")).rejects.toThrow(/Rien à copier/);
-    await expect(dupliquerSemaine(depot, "zoe", "2026-03-02", "2026-03-16")).rejects.toThrow(/Adulte/);
+    await expect(dupliquerSemaine(depot, "inconnu", "2026-03-02", "2026-03-16")).rejects.toThrow(/Adulte/);
     expect((await depot.lireJournal()).length).toBe(n);
   });
 });
