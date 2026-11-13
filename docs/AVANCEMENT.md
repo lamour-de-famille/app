@@ -12,7 +12,7 @@ Aucun arrêt en cours. Accès GitHub opérationnel (compte dédié, dépôt seul
 - Branche `develop` poussée
 
 ## En cours
-- Lot 1 : socle applicatif (Next.js, TypeScript, tests, lint, CI), puis modèle de données et moteur de règles.
+- Lot 1, tâche 0 : socle (PR lot-1/socle) en revue.
 
 ## Reste
 - Lot 1 (planning et agendas), lot 2 (charge mentale), lot 3 (enfants et éclaboussures).

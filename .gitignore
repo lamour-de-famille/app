@@ -150,3 +150,6 @@ vite.config.ts.timestamp-*
 
 # Modèle de configuration sans valeurs
 !.env.example
+
+# Next.js
+next-env.d.ts
