@@ -4,7 +4,7 @@ import { texteSur } from "@/lib/contraste";
 export const COULEURS_ENFANTS: Record<string, string> = {
   Léo: "#1E6BFF",
   Mila: "#FF2E88",
-  Nina: "#00B86B",
+  Nina: "#009A58",
 };
 
 export type EtatPastille = "adulte-connecte" | "autre-adulte" | "tiers";
