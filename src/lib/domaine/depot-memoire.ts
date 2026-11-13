@@ -15,6 +15,29 @@ const RE_DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const RE_HEURE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const RE_COULEUR = /^#[0-9a-fA-F]{6}$/;
 
+/** Vrai si la chaîne est une date calendaire réelle (pas 2026-02-31). */
+function dateReelle(d: string): boolean {
+  if (!RE_DATE.test(d)) return false;
+  const [a, m, j] = d.split("-").map(Number) as [number, number, number];
+  const t = new Date(Date.UTC(a, m - 1, j));
+  return t.getUTCFullYear() === a && t.getUTCMonth() === m - 1 && t.getUTCDate() === j;
+}
+
+function validerFamille(f: Famille) {
+  if (f.adultes.length !== 2 || f.adultes[0].id === f.adultes[1].id) {
+    throw new ErreurDomaine("Une famille compte exactement deux adultes aux ids différents");
+  }
+  if (new Set(f.enfants.map((e) => e.id)).size !== f.enfants.length) {
+    throw new ErreurDomaine("Ids d'enfant en double");
+  }
+  if (new Set(f.lieux.map((l) => l.id)).size !== f.lieux.length) {
+    throw new ErreurDomaine("Ids de lieu en double");
+  }
+  for (const type of ["domicile_a", "domicile_b"] as const) {
+    if (!f.lieux.some((l) => l.type === type)) throw new ErreurDomaine(`Lieu ${type} manquant`);
+  }
+}
+
 export interface OptionsDepotMemoire {
   /** Horloge injectable (tests). */
   maintenant?: () => Date;
@@ -40,6 +63,7 @@ export class DepotMemoire implements DepotFamille {
     for (const e of famille.enfants) {
       if (!RE_COULEUR.test(e.couleur)) throw new ErreurDomaine(`Couleur invalide pour ${e.prenom}`);
     }
+    validerFamille(famille);
     this.famille = copie(famille);
     this.maintenant = options.maintenant ?? (() => new Date());
   }
@@ -89,7 +113,7 @@ export class DepotMemoire implements DepotFamille {
     this.verifierLieu(t.lieuId);
     this.verifierAdulte(t.deposeId);
     this.verifierAdulte(t.recupereId);
-    const complet: Transfert = { ...copie(t), id: t.id ?? this.nouvelId("tr") };
+    const complet: Transfert = { ...copie(t), id: t.id ?? this.nouvelId("tr", this.transferts) };
     this.ecrire(auteurId, "transfert", this.transferts, complet.id, complet);
     return copie(complet);
   }
@@ -110,7 +134,8 @@ export class DepotMemoire implements DepotFamille {
     this.verifierEnfant(c.enfantId);
     this.verifierDate(c.date);
     if (!RE_HEURE.test(c.debut) || !RE_HEURE.test(c.fin)) throw new ErreurDomaine("Heure invalide");
-    const complet: Creneau = { ...copie(c), id: c.id ?? this.nouvelId("cr") };
+    if (c.fin < c.debut) throw new ErreurDomaine("La fin du créneau précède son début");
+    const complet: Creneau = { ...copie(c), id: c.id ?? this.nouvelId("cr", this.creneaux) };
     this.ecrire(auteurId, "creneau", this.creneaux, complet.id, complet);
     return copie(complet);
   }
@@ -131,7 +156,7 @@ export class DepotMemoire implements DepotFamille {
     d.enfantIds.forEach((e) => this.verifierEnfant(e));
     d.jours.forEach((j) => this.verifierDate(j));
     const demande: DemandeEchange = {
-      id: this.nouvelId("de"),
+      id: this.nouvelId("de", this.demandes),
       statut: "proposee",
       auteurId,
       responsableId: d.responsableId,
@@ -151,6 +176,8 @@ export class DepotMemoire implements DepotFamille {
       throw new ErreurDomaine("Seul l'autre adulte peut répondre à la demande");
     }
     if (demande.statut !== "proposee") throw new ErreurDomaine("Demande déjà traitée");
+    // Tout ce qui peut échouer est calculé avant la première écriture.
+    const domicile = reponse === "acceptee" ? this.domicileDe(demande.responsableId) : undefined;
     const maj: DemandeEchange = {
       ...demande,
       statut: reponse,
@@ -158,8 +185,7 @@ export class DepotMemoire implements DepotFamille {
       repondeurId,
     };
     this.ecrire(repondeurId, "demande", this.demandes, demandeId, maj);
-    if (reponse === "acceptee") {
-      const domicile = this.domicileDe(demande.responsableId);
+    if (domicile !== undefined) {
       for (const enfantId of demande.enfantIds) {
         for (const date of demande.jours) {
           const cle = `${enfantId}|${date}`;
@@ -183,14 +209,24 @@ export class DepotMemoire implements DepotFamille {
     return copie(this.evenements.filter((e) => e.destinataireId === destinataireId));
   }
 
-  async marquerNotifie(evenementId: string) {
+  async marquerNotifie(destinataireId: string, evenementId: string) {
+    this.verifierAdulte(destinataireId);
+    const ev = this.evenements.find((e) => e.id === evenementId);
+    if (!ev) throw new ErreurDomaine(`Événement inconnu : ${evenementId}`);
+    if (ev.destinataireId !== destinataireId) {
+      throw new ErreurDomaine("Cet événement est destiné à l'autre adulte");
+    }
     this.evenements = this.evenements.filter((e) => e.id !== evenementId);
   }
 
   // --- interne ---
 
-  private nouvelId(prefixe: string) {
-    return `${prefixe}-${++this.compteur}`;
+  /** Génère un id ; si `magasin` est fourni, saute les ids déjà pris (fournis par l'appelant). */
+  private nouvelId(prefixe: string, magasin?: Map<string, unknown>) {
+    let id: string;
+    do id = `${prefixe}-${++this.compteur}`;
+    while (magasin?.has(id));
+    return id;
   }
 
   /** Écrit, journalise et crée l'événement pour l'autre adulte. Sans effet si rien ne change. */
@@ -250,6 +286,6 @@ export class DepotMemoire implements DepotFamille {
     if (!this.famille.lieux.some((l) => l.id === id)) throw new ErreurDomaine(`Lieu inconnu : ${id}`);
   }
   private verifierDate(d: string) {
-    if (!RE_DATE.test(d)) throw new ErreurDomaine(`Date invalide : ${d}`);
+    if (!dateReelle(d)) throw new ErreurDomaine(`Date invalide : ${d}`);
   }
 }
