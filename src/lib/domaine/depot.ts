@@ -9,6 +9,7 @@ import type {
   Presence,
   Transfert,
 } from "./types";
+import type { Regle } from "../regles/types";
 
 export class ErreurDomaine extends Error {
   constructor(message: string) {
@@ -40,9 +41,11 @@ export interface DepotFamille {
 
   listerGardes(filtre?: FiltrePeriode): Promise<Garde[]>;
   definirGarde(auteurId: string, garde: Garde): Promise<void>;
+  supprimerGarde(auteurId: string, enfantId: string, date: DateJour): Promise<void>;
 
   listerPresences(filtre?: FiltrePeriode): Promise<Presence[]>;
   definirPresence(auteurId: string, presence: Presence): Promise<void>;
+  supprimerPresence(auteurId: string, enfantId: string, date: DateJour): Promise<void>;
 
   listerTransferts(filtre?: Omit<FiltrePeriode, "enfantId">): Promise<Transfert[]>;
   /** Crée (sans id) ou remplace (avec id) ; retourne le transfert enregistré. */
@@ -64,6 +67,12 @@ export interface DepotFamille {
     demandeId: string,
     reponse: "acceptee" | "refusee",
   ): Promise<DemandeEchange>;
+
+  /** Règles de planning : données sérialisables, validées à l'écriture. Le remplacement se fait par id. */
+  listerRegles(): Promise<Regle[]>;
+  enregistrerRegle(auteurId: string, regle: Regle): Promise<Regle>;
+  /** Refusé si une règle dérivée en dépend. */
+  supprimerRegle(auteurId: string, id: string): Promise<void>;
 
   lireJournal(): Promise<EntreeJournal[]>;
   /** Événements non encore consommés pour cet adulte. */

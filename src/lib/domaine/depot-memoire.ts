@@ -1,6 +1,9 @@
 import { ErreurDomaine, type DepotFamille, type FiltrePeriode, type NouvelleDemande } from "./depot";
+import { validerRegle } from "../regles/validation";
+import type { Regle } from "../regles/types";
 import type {
   Creneau,
+  DateJour,
   DemandeEchange,
   EntiteJournal,
   EntreeJournal,
@@ -56,6 +59,7 @@ export class DepotMemoire implements DepotFamille {
   private transferts = new Map<string, Transfert>();
   private creneaux = new Map<string, Creneau>();
   private demandes = new Map<string, DemandeEchange>();
+  private regles = new Map<string, Regle>();
   private journal: EntreeJournal[] = [];
   private evenements: EvenementANotifier[] = [];
 
@@ -84,6 +88,16 @@ export class DepotMemoire implements DepotFamille {
     this.verifierDate(garde.date);
     this.verifierAdulte(garde.responsableId);
     this.ecrire(auteurId, "garde", this.gardes, `${garde.enfantId}|${garde.date}`, copie(garde));
+  }
+
+  async supprimerGarde(auteurId: string, enfantId: string, date: DateJour) {
+    this.verifierAdulte(auteurId);
+    this.supprimer(auteurId, "garde", this.gardes, `${enfantId}|${date}`);
+  }
+
+  async supprimerPresence(auteurId: string, enfantId: string, date: DateJour) {
+    this.verifierAdulte(auteurId);
+    this.supprimer(auteurId, "presence", this.presences, `${enfantId}|${date}`);
   }
 
   async listerPresences(f?: FiltrePeriode) {
@@ -199,6 +213,39 @@ export class DepotMemoire implements DepotFamille {
       }
     }
     return copie(maj);
+  }
+
+  async listerRegles() {
+    return [...this.regles.values()].map(copie);
+  }
+
+  async enregistrerRegle(auteurId: string, regle: Regle) {
+    this.verifierAdulte(auteurId);
+    validerRegle(regle, this.famille);
+    if (regle.type === "derivee") {
+      const source = this.regles.get(regle.sourceId);
+      if (!source) throw new ErreurDomaine(`Règle source inconnue : ${regle.sourceId}`);
+      if (source.type === "derivee") throw new ErreurDomaine("Une règle dérivée ne peut pas suivre une autre dérivée");
+      if (this.dependantesDe(regle.id).length > 0) {
+        throw new ErreurDomaine("Une règle dont d'autres dépendent ne peut pas devenir dérivée");
+      }
+    }
+    const complete = copie(regle);
+    this.ecrire(auteurId, "regle", this.regles, complete.id, complete);
+    return copie(complete);
+  }
+
+  async supprimerRegle(auteurId: string, id: string) {
+    this.verifierAdulte(auteurId);
+    const dependantes = this.dependantesDe(id);
+    if (dependantes.length > 0) {
+      throw new ErreurDomaine(`Règle utilisée par : ${dependantes.map((r) => r.id).join(", ")}`);
+    }
+    this.supprimer(auteurId, "regle", this.regles, id);
+  }
+
+  private dependantesDe(id: string) {
+    return [...this.regles.values()].filter((r) => r.type === "derivee" && r.sourceId === id);
   }
 
   async lireJournal() {
