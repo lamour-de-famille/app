@@ -2,19 +2,20 @@
 
 Mise à jour : 2026-11-13
 
-## ARRÊT : jeton GitHub manquant
-
-Aucun jeton n'est configuré pour le compte dédié `lamour-de-famille` : la lecture publique du dépôt fonctionne, mais l'envoi (push), les pull requests et la CI sont impossibles.
-
-**À faire :** créer un jeton à portée limitée au seul dépôt `lamour-de-famille/app` (contenu et pull requests en lecture/écriture, workflows), le fournir via le gestionnaire d'identifiants Git ou `gh auth login` avec ce compte, puis relancer la session. Créer aussi la branche `develop` côté GitHub (ou me laisser la pousser).
+## État
+Aucun arrêt en cours. Accès GitHub opérationnel (compte dédié, dépôt seul). `develop` publiée, CI verte (contrôle des secrets).
 
 ## Fait
 - Définitions d'agents dans `.claude/agents/`
 - Garde-fous : `.env.example` sans valeurs, `.gitleaks.toml`, hook `pre-commit` (identité + secrets), CI gitleaks
 - `docs/HYPOTHESES.md`, `docs/adr/`
+- Branche `develop` poussée
 
 ## En cours
-Rien (arrêt).
+- Lot 1 : socle applicatif (Next.js, TypeScript, tests, lint, CI), puis modèle de données et moteur de règles.
 
 ## Reste
-Lot 1, lot 2, lot 3 (voir le plan de travail du coordinateur).
+- Lot 1 (planning et agendas), lot 2 (charge mentale), lot 3 (enfants et éclaboussures).
+
+## Mise en production
+Liste détaillée à compléter en fin de parcours.
