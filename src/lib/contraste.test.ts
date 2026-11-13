@@ -31,6 +31,11 @@ describe("contraste", () => {
       expect(contraste(texteSur(couleur), couleur), prenom).toBeGreaterThanOrEqual(SEUIL_TEXTE);
     }
   });
+  it("chaque contour d'enfant atteint 3:1 sur blanc (élément graphique, WCAG 1.4.11)", () => {
+    for (const [prenom, couleur] of Object.entries(COULEURS_ENFANTS)) {
+      expect(contraste(couleur, BLANC), prenom).toBeGreaterThanOrEqual(3);
+    }
+  });
   it("le texte est lisible sur la pastille grise et sur la pastille contour", () => {
     expect(contraste(TEXTE, "#E3E1E8")).toBeGreaterThanOrEqual(SEUIL_TEXTE);
     expect(contraste(TEXTE, BLANC)).toBeGreaterThanOrEqual(SEUIL_TEXTE);

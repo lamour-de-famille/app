@@ -45,8 +45,8 @@ describe("PastilleEnfant", () => {
     expect(c).toContain("–");
   });
   it("applique la couleur de l'enfant", () => {
-    expect(pastille("Nina", "#00B86B", "adulte-connecte")).toContain("background:#00B86B");
-    expect(pastille("Nina", "#00B86B", "autre-adulte")).toContain("border-color:#00B86B");
+    expect(pastille("Nina", "#009A58", "adulte-connecte")).toContain("background:#009A58");
+    expect(pastille("Nina", "#009A58", "autre-adulte")).toContain("border-color:#009A58");
   });
 });
 
