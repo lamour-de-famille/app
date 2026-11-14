@@ -44,6 +44,17 @@ describe("ClientGeminiHttp (fetch factice)", () => {
     expect(String(a?.init.body)).toContain("alex (Alex)".replace("Alex", familleFictive.adultes[0].prenom));
   });
 
+  it("borne la taille de la réponse et la réflexion, pour la dictée comme pour la rédaction", async () => {
+    const appels: Appel[] = [];
+    const c = new ClientGeminiHttp(CLE_FICTIVE, "m", fetchFactice(200, reponse(JSON.stringify(sortie)), appels));
+    await c.traiterDictee(demande());
+    await c.rediger({ consigne: "a", contexte: "b" });
+    const [dictee, redaction] = appels.map((a) => JSON.parse(String(a.init.body)).generationConfig);
+    expect(dictee).toEqual({ responseMimeType: "application/json", maxOutputTokens: 4000, thinkingConfig: { thinkingBudget: 1024 } });
+    expect(redaction.maxOutputTokens).toBeGreaterThan(0);
+    expect(redaction.thinkingConfig.thinkingBudget).toBeGreaterThan(0);
+  });
+
   it("rediger rend le texte et l'usage", async () => {
     const c = new ClientGeminiHttp(CLE_FICTIVE, "m", fetchFactice(200, reponse(" Bonjour ", { promptTokenCount: 5, candidatesTokenCount: 2 })));
     expect(await c.rediger({ consigne: "a", contexte: "b" })).toEqual({ texte: "Bonjour", usage: { jetonsEntree: 5, jetonsSortie: 2 } });
