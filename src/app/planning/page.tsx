@@ -1,16 +1,15 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { Bouton } from "@/components/Bouton";
 import { Carte } from "@/components/Carte";
 import { RepereEnfant } from "@/components/RepereEnfant";
-import { chargerPlanning, depotPartage } from "@/lib/vues/chargeur-planning";
+import { exigerAdulte } from "@/lib/acces/serveur";
+import { chargerPlanning } from "@/lib/vues/chargeur-planning";
 import { analyserMois, dateValide } from "@/lib/vues/mois";
 import { proposerEchange, repondreDemande } from "./actions";
 import "./planning.css";
 
 export const dynamic = "force-dynamic";
 
-const ADULTES_DEMO = ["alex", "sam"];
 const JOURS_SEMAINE = [
   ["lun.", "lundi"],
   ["mar.", "mardi"],
@@ -53,12 +52,11 @@ const MESSAGES: Record<string, string> = {
 
 type Params = { adulte?: string; mois?: string; jour?: string; resultat?: string };
 
-/** Doublure d'authentification : `?adulte=alex|sam` ; la route est masquée en production. */
+/** Page protégée : l'adulte vient de la session (`?adulte=` uniquement en mode démonstration). */
 export default async function Planning({ searchParams }: { searchParams: Promise<Params> }) {
-  if (process.env.NODE_ENV === "production") notFound();
   const q = await searchParams;
-  const adulteId = q.adulte && ADULTES_DEMO.includes(q.adulte) ? q.adulte : "alex";
   const aujourdhui = aujourdhuiLocal();
+  const { adulteId, demo, depot, famille } = await exigerAdulte(aujourdhui, q.adulte);
   const { annee, mois } = analyserMois(q.mois, aujourdhui.slice(0, 7));
   const moisTexte = `${annee}-${String(mois).padStart(2, "0")}`;
   const jour =
@@ -68,13 +66,10 @@ export default async function Planning({ searchParams }: { searchParams: Promise
         ? aujourdhui
         : `${moisTexte}-01`;
 
-  const depot = await depotPartage(aujourdhui);
-  const [vue, famille] = await Promise.all([
-    chargerPlanning(depot, adulteId, annee, mois, jour),
-    depot.lireFamille(),
-  ]);
+  const vue = await chargerPlanning(depot, adulteId, annee, mois, jour);
   const lien = (m: string, j?: string) => {
-    const p = new URLSearchParams({ adulte: adulteId, mois: m });
+    const p = new URLSearchParams({ mois: m });
+    if (demo) p.set("adulte", adulteId);
     if (j) p.set("jour", j);
     return `/planning?${p.toString()}`;
   };
@@ -196,7 +191,7 @@ export default async function Planning({ searchParams }: { searchParams: Promise
                 {d.enfants.join(", ")} le {d.jours.map(formatCourt).join(", ")}.
               </p>
               <form action={repondreDemande} className="reponse">
-                <input type="hidden" name="adulte" value={adulteId} />
+                {demo ? <input type="hidden" name="adulte" value={adulteId} /> : null}
                 <input type="hidden" name="mois" value={moisTexte} />
                 <input type="hidden" name="demande" value={d.id} />
                 <Bouton type="submit" name="reponse" value="acceptee">
@@ -220,7 +215,7 @@ export default async function Planning({ searchParams }: { searchParams: Promise
         <details className="proposer">
           <summary>Proposer un échange</summary>
           <form action={proposerEchange} className="formulaire">
-            <input type="hidden" name="adulte" value={adulteId} />
+            {demo ? <input type="hidden" name="adulte" value={adulteId} /> : null}
             <input type="hidden" name="mois" value={moisTexte} />
             <label>
               Premier jour

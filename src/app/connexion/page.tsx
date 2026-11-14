@@ -1,5 +1,6 @@
 const MESSAGES: Record<string, string> = {
   "non-autorise": "Cette adresse n'est pas autorisée à accéder à l'application. Demandez à être ajoutée à la liste.",
+  "adulte-absent": "Cette adresse n'est pas rattachée à un adulte de la famille. Demandez à l'administrateur de la rattacher.",
   etat: "La demande de connexion a expiré ou n'est pas valide. Merci de réessayer.",
   refuse: "La connexion a été annulée.",
   echec: "La connexion a échoué. Merci de réessayer.",

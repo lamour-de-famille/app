@@ -87,7 +87,7 @@ describe("choisirVueAujourdhui : prochain transfert", () => {
     expect(vue.prochainTransfert).toMatchObject({
       date: "2026-11-14",
       heure: "17:30",
-      lieu: "École du Tilleul",
+      lieu: "École Exemple",
       depose: "vous",
       recupere: "Sam",
       enfants: ["Léo", "Mila"],
