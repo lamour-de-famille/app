@@ -35,7 +35,4 @@ export function nettoyer<T>(valeur: T): T {
 /** Ordre des ids : unités de code, identique partout (jamais `localeCompare`). */
 export const comparerIds = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-/** Un id de document ne peut ni contenir « / », ni valoir « . » ou « .. », ni être de la forme « __x__ ». */
-export function idDocumentValide(id: string): boolean {
-  return id.length > 0 && id.length <= 1500 && !id.includes("/") && id !== "." && id !== ".." && !/^__.*__$/.test(id);
-}
+export { idDocumentValide } from "../domaine/identifiant";

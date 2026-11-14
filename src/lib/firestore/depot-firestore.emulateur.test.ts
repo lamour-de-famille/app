@@ -34,7 +34,7 @@ describe.skipIf(!actif)("Firestore (émulateur)", () => {
   });
 
   describe("DepotCarnetFirestore", () => {
-    suiteDepotCarnet(async () => new DepotCarnetFirestore(await ouvrir(), unique(), ["alex", "sam"]));
+    suiteDepotCarnet(async (transferts) => new DepotCarnetFirestore(await ouvrir(), unique(), ["alex", "sam"], transferts));
   });
 
   describe("DepotCochesFirestore", () => {

@@ -5,20 +5,20 @@ import { familleFictive } from "../domaine/fixture-famille";
 import type { Creneau, Transfert } from "../domaine/types";
 import { BanqueMemoire } from "../firestore/banque-memoire";
 import { DepotCarnetFirestore, DepotCochesFirestore } from "../firestore/carnet-firestore";
-import { DepotCarnetMemoire, ecrireCarnetDuTransfert, lireCarnetDuTransfert } from "./carnet";
+import { DepotCarnetMemoire, lireCarnetDuTransfert } from "./carnet";
 import { DepotCochesMemoire } from "./coches";
 import { CONFIGURATION_LISTE_EXEMPLE } from "./configuration-liste-exemple";
-import { suiteDepotCarnet, suiteDepotCoches } from "./contrats";
+import { suiteDepotCarnet, suiteDepotCoches, transfertsFictifs } from "./contrats";
 import { avancement, listeDuTransfert, validerConfigurationListe, type ConfigurationListe } from "./liste";
 
 const adultes = ["alex", "sam"];
 const maintenant = () => new Date("2031-05-04T08:00:00Z");
 
 describe("DepotCarnetMemoire", () => {
-  suiteDepotCarnet(async () => new DepotCarnetMemoire(adultes, { maintenant }));
+  suiteDepotCarnet(async (transferts) => new DepotCarnetMemoire(adultes, transferts, { maintenant }));
 });
 describe("DepotCarnetFirestore sur banque en mémoire", () => {
-  suiteDepotCarnet(async () => new DepotCarnetFirestore(new BanqueMemoire(), "fam-carnet", adultes, { maintenant }));
+  suiteDepotCarnet(async (transferts) => new DepotCarnetFirestore(new BanqueMemoire(), "fam-carnet", adultes, transferts, { maintenant }));
 });
 describe("DepotCochesMemoire", () => {
   suiteDepotCoches(async () => new DepotCochesMemoire(adultes, maintenant));
@@ -29,14 +29,14 @@ describe("DepotCochesFirestore sur banque en mémoire", () => {
 
 describe("carnet : réglages en configuration", () => {
   it("applique une limite de lignes et de longueur différente", async () => {
-    const d = new DepotCarnetMemoire(adultes, { configuration: { maxLignes: 1, longueurMaxLigne: 5 } });
-    await d.ecrire("alex", { transfertId: "t" }, ["12345"]);
-    await expect(d.ecrire("alex", { transfertId: "t" }, ["1", "2"])).rejects.toThrow(ErreurDomaine);
-    await expect(d.ecrire("alex", { transfertId: "t" }, ["123456"])).rejects.toThrow(ErreurDomaine);
+    const d = new DepotCarnetMemoire(adultes, transfertsFictifs(), { configuration: { maxLignes: 1, longueurMaxLigne: 5 } });
+    await d.ecrire("alex", { transfertId: "t-1" }, ["12345"]);
+    await expect(d.ecrire("alex", { transfertId: "t-1" }, ["1", "2"])).rejects.toThrow(ErreurDomaine);
+    await expect(d.ecrire("alex", { transfertId: "t-1" }, ["123456"])).rejects.toThrow(ErreurDomaine);
   });
   it("refuse une configuration absurde et un identifiant de famille impropre", () => {
-    expect(() => new DepotCarnetMemoire(adultes, { configuration: { maxLignes: 0, longueurMaxLigne: 10 } })).toThrow(ErreurDomaine);
-    expect(() => new DepotCarnetFirestore(new BanqueMemoire(), "a/b", adultes)).toThrow(ErreurDomaine);
+    expect(() => new DepotCarnetMemoire(adultes, transfertsFictifs(), { configuration: { maxLignes: 0, longueurMaxLigne: 10 } })).toThrow(ErreurDomaine);
+    expect(() => new DepotCarnetFirestore(new BanqueMemoire(), "a/b", adultes, transfertsFictifs())).toThrow(ErreurDomaine);
     expect(() => new DepotCochesFirestore(new BanqueMemoire(), "..", adultes)).toThrow(ErreurDomaine);
   });
 });
@@ -52,17 +52,17 @@ describe("carnet d'un transfert : seul celui qui remet écrit", () => {
       recupereId: "sam",
       enfantIds: ["leo"],
     });
-    return { famille, t, carnet: new DepotCarnetMemoire(adultes, { maintenant }) };
+    return { famille, t, carnet: new DepotCarnetMemoire(adultes, famille, { maintenant }) };
   }
   it("accepte celui qui remet, refuse celui qui récupère, et laisse celui-ci lire", async () => {
     const { famille, t, carnet } = await monter();
-    await expect(ecrireCarnetDuTransfert(famille, carnet, "sam", t.id, ["x"])).rejects.toThrow(ErreurDomaine);
-    await ecrireCarnetDuTransfert(famille, carnet, "alex", t.id, ["Léo a faim à 17 h"]);
+    await expect(carnet.ecrire("sam", { transfertId: t.id }, ["x"])).rejects.toThrow(ErreurDomaine);
+    await carnet.ecrire("alex", { transfertId: t.id }, ["Léo a faim à 17 h"]);
     expect((await lireCarnetDuTransfert(famille, carnet, "sam", t.id))?.lignes).toEqual(["Léo a faim à 17 h"]);
   });
   it("refuse un transfert inconnu", async () => {
     const { famille, carnet } = await monter();
-    await expect(ecrireCarnetDuTransfert(famille, carnet, "alex", "nul", ["x"])).rejects.toThrow(ErreurDomaine);
+    await expect(carnet.ecrire("alex", { transfertId: "nul" }, ["x"])).rejects.toThrow(ErreurDomaine);
     await expect(lireCarnetDuTransfert(famille, carnet, "sam", "nul")).rejects.toThrow(ErreurDomaine);
   });
 });
@@ -129,6 +129,19 @@ describe("listeDuTransfert", () => {
       "nina|serviette",
       "nina|instrument",
     ]);
+  });
+
+  it("compare les motifs par mots entiers : « sport » ne correspond pas à « transport »", () => {
+    const config: ConfigurationListe = {
+      baseCommune: [],
+      baseParEnfant: {},
+      correspondances: [{ motif: "sport", moment: "jour", elements: [{ code: "tenue-sport", libelle: "Tenue" }] }],
+    };
+    const codes = (libelle: string) => ids(liste([creneau("c1", "leo", "2031-05-04", libelle)], transfert(), config)).filter((i) => i.startsWith("leo|"));
+    expect(codes("Transport scolaire")).toEqual([]);
+    expect(codes("Sports collectifs")).toEqual([]);
+    expect(codes("Cours de sport, gymnase")).toEqual(["leo|tenue-sport"]);
+    expect(codes("SPORT")).toEqual(["leo|tenue-sport"]);
   });
 
   it("n'ajoute pas deux fois le même code (base prioritaire, deux créneaux)", () => {

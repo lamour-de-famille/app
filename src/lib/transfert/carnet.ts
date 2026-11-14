@@ -1,6 +1,6 @@
 import { ErreurDomaine, type DepotFamille } from "../domaine/depot";
 import type { DateJour } from "../domaine/types";
-import { idDocumentValide } from "../firestore/banque";
+import { idDocumentValide } from "../domaine/identifiant";
 
 /** Valeurs de réglage du carnet : jamais codées dans la logique, fixées à la construction du dépôt. */
 export interface ConfigurationCarnet {
@@ -82,17 +82,33 @@ export function preparerEcriture(
   cible: CibleCarnet,
   lignes: string[],
   maintenant: Date,
+  parTransfert = false,
 ): CarnetPassation {
   verifierAdulte(adultes, auteurId);
   const cle = cleCarnet(cible);
   const propres = validerLignes(config, lignes);
-  if (existant && existant.auteurId !== auteurId) throw new ErreurDomaine("Seul l'auteur du carnet peut le modifier");
+  if (!parTransfert && existant && existant.auteurId !== auteurId) throw new ErreurDomaine("Seul l'auteur du carnet peut le modifier");
   return { cle, cible: { ...cible }, auteurId, lignes: propres, modifieLe: maintenant.toISOString() };
 }
 
-export function verifierEffacement(adultes: readonly string[], existant: CarnetPassation | undefined, auteurId: string) {
+export function verifierEffacement(adultes: readonly string[], existant: CarnetPassation | undefined, auteurId: string, parTransfert = false) {
   verifierAdulte(adultes, auteurId);
-  if (existant && existant.auteurId !== auteurId) throw new ErreurDomaine("Seul l'auteur du carnet peut l'effacer");
+  if (!parTransfert && existant && existant.auteurId !== auteurId) throw new ErreurDomaine("Seul l'auteur du carnet peut l'effacer");
+}
+
+export type AccesTransferts = Pick<DepotFamille, "listerTransferts">;
+
+/**
+ * Pour un carnet de transfert : le transfert doit exister et `auteurId` en être l'adulte qui remet (`deposeId`).
+ * Retourne vrai pour une cible de transfert (le propriétaire est alors `deposeId`, pas le premier auteur), faux pour une date.
+ * Le transfert vit hors de la transaction du carnet : la vérification précède celle-ci.
+ */
+export async function controlerCible(transferts: AccesTransferts, auteurId: string, cible: CibleCarnet): Promise<boolean> {
+  if (!("transfertId" in cible)) return false;
+  const t = (await transferts.listerTransferts()).find((x) => x.id === cible.transfertId);
+  if (!t) throw new ErreurDomaine(`Transfert introuvable : ${cible.transfertId}`);
+  if (t.deposeId !== auteurId) throw new ErreurDomaine("Seul l'adulte qui remet les enfants peut écrire ou effacer le carnet du transfert");
+  return true;
 }
 
 export class DepotCarnetMemoire implements DepotCarnet {
@@ -102,6 +118,7 @@ export class DepotCarnetMemoire implements DepotCarnet {
 
   constructor(
     private readonly adultes: readonly string[],
+    private readonly transferts: AccesTransferts,
     options: { configuration?: ConfigurationCarnet; maintenant?: () => Date } = {},
   ) {
     this.config = verifierConfigurationCarnet(options.configuration ?? CONFIGURATION_CARNET_DEFAUT);
@@ -110,8 +127,9 @@ export class DepotCarnetMemoire implements DepotCarnet {
 
   async ecrire(auteurId: string, cible: CibleCarnet, lignes: string[]) {
     verifierAdulte(this.adultes, auteurId);
-    const existant = this.carnets.get(cleCarnet(cible));
-    const c = preparerEcriture(this.config, this.adultes, existant, auteurId, cible, lignes, this.maintenant());
+    const cle = cleCarnet(cible);
+    const parTransfert = await controlerCible(this.transferts, auteurId, cible);
+    const c = preparerEcriture(this.config, this.adultes, this.carnets.get(cle), auteurId, cible, lignes, this.maintenant(), parTransfert);
     this.carnets.set(c.cle, c);
     return structuredClone(c);
   }
@@ -125,32 +143,14 @@ export class DepotCarnetMemoire implements DepotCarnet {
   async effacer(auteurId: string, cible: CibleCarnet) {
     verifierAdulte(this.adultes, auteurId);
     const cle = cleCarnet(cible);
-    verifierEffacement(this.adultes, this.carnets.get(cle), auteurId);
+    const parTransfert = await controlerCible(this.transferts, auteurId, cible);
+    verifierEffacement(this.adultes, this.carnets.get(cle), auteurId, parTransfert);
     this.carnets.delete(cle);
   }
 }
 
-/** Écriture d'un carnet de transfert : seul l'adulte qui remet les enfants (`deposeId`) peut l'écrire. */
-export async function ecrireCarnetDuTransfert(
-  famille: Pick<DepotFamille, "listerTransferts">,
-  carnet: DepotCarnet,
-  auteurId: string,
-  transfertId: string,
-  lignes: string[],
-) {
-  const t = (await famille.listerTransferts()).find((x) => x.id === transfertId);
-  if (!t) throw new ErreurDomaine(`Transfert introuvable : ${transfertId}`);
-  if (t.deposeId !== auteurId) throw new ErreurDomaine("Seul l'adulte qui remet les enfants peut écrire le carnet du transfert");
-  return carnet.ecrire(auteurId, { transfertId }, lignes);
-}
-
 /** Lecture du carnet d'un transfert existant par l'un des deux adultes. */
-export async function lireCarnetDuTransfert(
-  famille: Pick<DepotFamille, "listerTransferts">,
-  carnet: DepotCarnet,
-  lecteurId: string,
-  transfertId: string,
-) {
+export async function lireCarnetDuTransfert(famille: AccesTransferts, carnet: DepotCarnet, lecteurId: string, transfertId: string) {
   if (!(await famille.listerTransferts()).some((x) => x.id === transfertId)) {
     throw new ErreurDomaine(`Transfert introuvable : ${transfertId}`);
   }

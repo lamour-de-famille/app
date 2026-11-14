@@ -1,20 +1,29 @@
 import { describe, expect, it } from "vitest";
 import { ErreurDomaine } from "../domaine/depot";
-import type { DepotCarnet } from "./carnet";
+import type { Transfert } from "../domaine/types";
+import type { AccesTransferts, DepotCarnet } from "./carnet";
 import type { DepotCoches } from "./coches";
 
 /** Contrats communs, exécutés contre chaque implémentation. Adultes fictifs : alex et sam ; intrus : intrus. */
 const T1 = { transfertId: "t-1" };
 const JOUR = { date: "2031-05-04" };
 
-export function suiteDepotCarnet(creer: () => Promise<DepotCarnet>) {
+/** Famille fictive : t-1 est remis par alex à sam. Le tableau est modifiable par les tests. */
+export function transfertsFictifs(): AccesTransferts & { liste: Transfert[] } {
+  const liste: Transfert[] = [
+    { id: "t-1", date: "2031-05-04", heure: "18:00", lieuId: "ecole", deposeId: "alex", recupereId: "sam", enfantIds: ["leo"] },
+  ];
+  return { liste, listerTransferts: async () => structuredClone(liste) };
+}
+
+export function suiteDepotCarnet(creer: (transferts: AccesTransferts) => Promise<DepotCarnet>) {
   describe("contrat DepotCarnet", () => {
     it("n'a rien tant que rien n'est écrit", async () => {
-      expect(await (await creer()).lire("sam", T1)).toBeUndefined();
+      expect(await (await creer(transfertsFictifs())).lire("sam", T1)).toBeUndefined();
     });
 
     it("l'auteur écrit, l'autre adulte lit les mêmes lignes nettoyées", async () => {
-      const d = await creer();
+      const d = await creer(transfertsFictifs());
       const ecrit = await d.ecrire("alex", T1, ["  Léo a un rhume  ", "Mila dort tôt"]);
       expect(ecrit.lignes).toEqual(["Léo a un rhume", "Mila dort tôt"]);
       const lu = await d.lire("sam", T1);
@@ -23,7 +32,7 @@ export function suiteDepotCarnet(creer: () => Promise<DepotCarnet>) {
     });
 
     it("rattache aussi un carnet à une date, séparé de celui du transfert", async () => {
-      const d = await creer();
+      const d = await creer(transfertsFictifs());
       await d.ecrire("alex", JOUR, ["Pour la date"]);
       await d.ecrire("alex", T1, ["Pour le transfert"]);
       expect((await d.lire("sam", JOUR))?.lignes).toEqual(["Pour la date"]);
@@ -31,7 +40,7 @@ export function suiteDepotCarnet(creer: () => Promise<DepotCarnet>) {
     });
 
     it("l'auteur remplace ses lignes ; l'autre adulte ne peut ni modifier ni effacer", async () => {
-      const d = await creer();
+      const d = await creer(transfertsFictifs());
       await d.ecrire("alex", T1, ["Avant"]);
       await expect(d.ecrire("sam", T1, ["Intrusion"])).rejects.toThrow(ErreurDomaine);
       await expect(d.effacer("sam", T1)).rejects.toThrow(ErreurDomaine);
@@ -43,7 +52,7 @@ export function suiteDepotCarnet(creer: () => Promise<DepotCarnet>) {
     });
 
     it("refuse plus de trois lignes, une ligne vide, trop longue, ou sur plusieurs lignes", async () => {
-      const d = await creer();
+      const d = await creer(transfertsFictifs());
       await d.ecrire("alex", T1, ["a", "b", "c"]);
       for (const mauvais of [["a", "b", "c", "d"], [], ["ok", "   "], ["x".repeat(81)], ["deux\nlignes"]]) {
         await expect(d.ecrire("alex", T1, mauvais)).rejects.toThrow(ErreurDomaine);
@@ -52,15 +61,51 @@ export function suiteDepotCarnet(creer: () => Promise<DepotCarnet>) {
     });
 
     it("refuse un inconnu en lecture comme en écriture, et les cibles invalides", async () => {
-      const d = await creer();
+      const d = await creer(transfertsFictifs());
       await expect(d.ecrire("intrus", T1, ["x"])).rejects.toThrow(ErreurDomaine);
       await expect(d.lire("intrus", T1)).rejects.toThrow(ErreurDomaine);
       await expect(d.ecrire("alex", { transfertId: "a/b" }, ["x"])).rejects.toThrow(ErreurDomaine);
       await expect(d.ecrire("alex", { date: "2031-02-30" }, ["x"])).rejects.toThrow(ErreurDomaine);
     });
 
+    it("transfert : celui qui récupère ne peut ni écrire, ni squatter, ni effacer ; celui qui remet écrit ; l'autre lit", async () => {
+      const d = await creer(transfertsFictifs());
+      await expect(d.ecrire("sam", T1, ["Squat"])).rejects.toThrow(ErreurDomaine);
+      expect(await d.lire("alex", T1)).toBeUndefined();
+      await d.ecrire("alex", T1, ["Légitime"]);
+      await expect(d.ecrire("sam", T1, ["Squat"])).rejects.toThrow(ErreurDomaine);
+      await expect(d.effacer("sam", T1)).rejects.toThrow(ErreurDomaine);
+      expect((await d.lire("sam", T1))?.lignes).toEqual(["Légitime"]);
+    });
+
+    it("transfert inconnu : écriture et effacement refusés", async () => {
+      const d = await creer(transfertsFictifs());
+      await expect(d.ecrire("alex", { transfertId: "nul" }, ["x"])).rejects.toThrow(ErreurDomaine);
+      await expect(d.effacer("alex", { transfertId: "nul" })).rejects.toThrow(ErreurDomaine);
+    });
+
+    it("transfert : si deposeId change, le nouvel adulte qui remet reprend le carnet, l'ancien le perd", async () => {
+      const f = transfertsFictifs();
+      const d = await creer(f);
+      await d.ecrire("alex", T1, ["Avant"]);
+      f.liste[0]!.deposeId = "sam";
+      f.liste[0]!.recupereId = "alex";
+      await expect(d.ecrire("alex", T1, ["Ancien"])).rejects.toThrow(ErreurDomaine);
+      expect((await d.ecrire("sam", T1, ["Nouveau"])).lignes).toEqual(["Nouveau"]);
+      await d.effacer("sam", T1);
+      expect(await d.lire("alex", T1)).toBeUndefined();
+    });
+
+    it("date : le premier auteur est propriétaire, l'autre adulte ne peut ni écrire ni effacer", async () => {
+      const d = await creer(transfertsFictifs());
+      await d.ecrire("sam", JOUR, ["À moi"]);
+      await expect(d.ecrire("alex", JOUR, ["Squat"])).rejects.toThrow(ErreurDomaine);
+      await expect(d.effacer("alex", JOUR)).rejects.toThrow(ErreurDomaine);
+      expect((await d.lire("alex", JOUR))?.lignes).toEqual(["À moi"]);
+    });
+
     it("isole la valeur retournée", async () => {
-      const d = await creer();
+      const d = await creer(transfertsFictifs());
       const c = await d.ecrire("alex", T1, ["a"]);
       c.lignes.push("modifié");
       (await d.lire("sam", T1))!.lignes.push("autre");

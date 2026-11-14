@@ -10,9 +10,12 @@ import {
   type CibleCarnet,
   type ConfigurationCarnet,
   type DepotCarnet,
+  type AccesTransferts,
+  controlerCible,
 } from "../transfert/carnet";
 import { appliquerCoche, verifierIdTransfert, type DepotCoches, type EtatCoches } from "../transfert/coches";
-import { idDocumentValide, type Banque, type Donnees } from "./banque";
+import { idDocumentValide } from "../domaine/identifiant";
+import type { Banque, Donnees } from "./banque";
 
 function collection(familleId: string, nom: string) {
   if (!idDocumentValide(familleId)) throw new ErreurDomaine(`Identifiant de famille invalide : ${familleId}`);
@@ -29,6 +32,7 @@ export class DepotCarnetFirestore implements DepotCarnet {
     private readonly banque: Banque,
     familleId: string,
     private readonly adultes: readonly string[],
+    private readonly transferts: AccesTransferts,
     options: { configuration?: ConfigurationCarnet; maintenant?: () => Date } = {},
   ) {
     this.chemin = collection(familleId, "carnets");
@@ -39,9 +43,10 @@ export class DepotCarnetFirestore implements DepotCarnet {
   async ecrire(auteurId: string, cible: CibleCarnet, lignes: string[]) {
     verifierAdulte(this.adultes, auteurId);
     const cle = cleCarnet(cible);
+    const parTransfert = await controlerCible(this.transferts, auteurId, cible);
     return this.banque.transaction(async (tx) => {
       const existant = (await tx.lire(this.chemin, cle)) as unknown as CarnetPassation | undefined;
-      const c = preparerEcriture(this.config, this.adultes, existant, auteurId, cible, lignes, this.maintenant());
+      const c = preparerEcriture(this.config, this.adultes, existant, auteurId, cible, lignes, this.maintenant(), parTransfert);
       tx.ecrire(this.chemin, cle, c as unknown as Donnees);
       return c;
     });
@@ -57,9 +62,10 @@ export class DepotCarnetFirestore implements DepotCarnet {
   async effacer(auteurId: string, cible: CibleCarnet) {
     verifierAdulte(this.adultes, auteurId);
     const cle = cleCarnet(cible);
+    const parTransfert = await controlerCible(this.transferts, auteurId, cible);
     await this.banque.transaction(async (tx) => {
       const existant = (await tx.lire(this.chemin, cle)) as unknown as CarnetPassation | undefined;
-      verifierEffacement(this.adultes, existant, auteurId);
+      verifierEffacement(this.adultes, existant, auteurId, parTransfert);
       if (existant) tx.supprimer(this.chemin, cle);
     });
   }

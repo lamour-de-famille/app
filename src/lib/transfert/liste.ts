@@ -1,6 +1,12 @@
 import { ErreurDomaine } from "../domaine/depot";
 import type { Creneau, Famille, Transfert } from "../domaine/types";
 import { ajouterJours, sansAccent } from "../regles/dates";
+
+/** Le motif doit apparaître en mots entiers : « sport » ne correspond pas à « transport ». */
+function motifEntier(motif: string): RegExp {
+  const m = sansAccent(motif).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![\\p{L}\\p{N}])${m}(?![\\p{L}\\p{N}])`, "u");
+}
 import type { EtatCoches } from "./coches";
 
 /** Un objet à emporter : `code` est stable (il sert à l'identifiant de l'élément), `libelle` s'affiche. */
@@ -104,11 +110,11 @@ export function listeDuTransfert(
       .filter((c) => c.enfantId === enfantId)
       .sort((a, b) => (a.date + a.debut + a.id < b.date + b.debut + b.id ? -1 : 1));
     for (const regle of config.correspondances) {
-      const motif = sansAccent(regle.motif).trim();
+      const motif = motifEntier(regle.motif);
       for (const c of siens) {
         const dansLaFenetre =
           (c.date === transfert.date && regle.moment !== "lendemain") || (c.date === lendemain && regle.moment !== "jour");
-        if (dansLaFenetre && sansAccent(c.libelle).includes(motif)) for (const m of regle.elements) ajouter(m, "creneau", c.id);
+        if (dansLaFenetre && motif.test(sansAccent(c.libelle))) for (const m of regle.elements) ajouter(m, "creneau", c.id);
       }
     }
   }
