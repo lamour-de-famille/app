@@ -14,7 +14,7 @@ export const familleFictive: Famille = {
     { id: "nina", prenom: "Nina", couleur: "#009A58" },
   ],
   lieux: [
-    { id: "ecole", type: "ecole", libelle: "École du Tilleul" },
+    { id: "ecole", type: "ecole", libelle: "École Exemple" },
     { id: "dom-alex", type: "domicile_a", libelle: "Chez Alex" },
     { id: "dom-sam", type: "domicile_b", libelle: "Chez Sam" },
     { id: "parc", type: "autre", libelle: "Parc municipal" },

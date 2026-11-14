@@ -156,3 +156,8 @@ next-env.d.ts
 
 # Worktrees des équipiers
 .claude/worktrees/
+
+# Données réelles de la famille (amorçage) : jamais versionnées
+famille.local.json
+*.famille.json
+.env.famille
