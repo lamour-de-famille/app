@@ -16,7 +16,8 @@ describe("pages Aujourd'hui et Planning en production", () => {
   it("aucune page n'utilise le dépôt de démonstration directement", () => {
     for (const f of ["./aujourdhui/page.tsx", "./planning/page.tsx", "./planning/actions.ts"]) {
       expect(lire(f)).not.toMatch(/depotDemonstration|depotPartage/);
-      expect(lire(f)).toMatch(/obtenirDepot/);
+      expect(lire(f)).not.toMatch(/obtenirDepot|ouvrirBanque/);
+      expect(lire(f)).toMatch(/depot/);
     }
   });
 });

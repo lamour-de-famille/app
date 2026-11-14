@@ -131,3 +131,20 @@ describe("secret de session absent", () => {
     expect(resoudreAcces({ env: { ...ENV_PROD, SESSION_SECRET: "court" }, famille: familleFictive, jeton: "a.b" }).ok).toBe(false);
   });
 });
+
+describe("banque Firestore unique", () => {
+  it("une seule instance est réutilisée entre les appels", async () => {
+    const { banqueUnique, reinitialiserBanqueUnique } = await import("./depot");
+    reinitialiserBanqueUnique();
+    let ouvertures = 0;
+    const ouvrir = async () => {
+      ouvertures++;
+      return new BanqueMemoire();
+    };
+    const a = await banqueUnique("p", ouvrir);
+    const b = await banqueUnique("p", ouvrir);
+    expect(a).toBe(b);
+    expect(ouvertures).toBe(1);
+    reinitialiserBanqueUnique();
+  });
+});

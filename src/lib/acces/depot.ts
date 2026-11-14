@@ -1,5 +1,5 @@
 import { ErreurDomaine, type DepotFamille } from "@/lib/domaine/depot";
-import type { DateJour } from "@/lib/domaine/types";
+import type { DateJour, Famille } from "@/lib/domaine/types";
 import type { Banque } from "@/lib/firestore/banque";
 import { ouvrirBanqueFirestore } from "@/lib/firestore/banque-firestore";
 import { DepotFirestore } from "@/lib/firestore/depot-firestore";
@@ -14,6 +14,26 @@ export class ErreurNonConfigure extends Error {
   }
 }
 
+type Cache = Map<string, Promise<Banque>>;
+const g = globalThis as { __banqueFirestore?: Cache };
+
+/** Une seule banque (un seul client Firestore) par projet et par processus, partagée entre pages et actions. */
+export function banqueUnique(projectId: string, ouvrir: (id: string) => Promise<Banque> = ouvrirBanqueFirestore): Promise<Banque> {
+  const cache = (g.__banqueFirestore ??= new Map());
+  let b = cache.get(projectId);
+  if (!b) {
+    b = ouvrir(projectId);
+    b.catch(() => cache.delete(projectId));
+    cache.set(projectId, b);
+  }
+  return b;
+}
+
+/** Pour les tests : oublie les banques ouvertes. */
+export function reinitialiserBanqueUnique(): void {
+  g.__banqueFirestore = new Map();
+}
+
 /**
  * Seul point de choix du dépôt de données.
  * - Mode démonstration (MODE_DEMO=1 hors production) : dépôt de démonstration.
@@ -22,15 +42,28 @@ export class ErreurNonConfigure extends Error {
  * `banque` permet d'injecter une doublure (tests) ; elle remplace seulement le client Firestore.
  */
 export async function obtenirDepot(date: DateJour, env: Env = process.env, banque?: Banque): Promise<DepotFamille> {
-  if (modeDemoActif(env)) return depotPartage(date);
+  return (await obtenirDepotEtFamille(date, env, banque)).depot;
+}
+
+/** Comme `obtenirDepot`, en rendant aussi la famille lue pour la validation (une seule lecture). */
+export async function obtenirDepotEtFamille(
+  date: DateJour,
+  env: Env = process.env,
+  banque?: Banque,
+): Promise<{ depot: DepotFamille; famille: Famille }> {
+  if (modeDemoActif(env)) {
+    const depot = await depotPartage(date);
+    return { depot, famille: await depot.lireFamille() };
+  }
   const familleId = env.FAMILLE_ID?.trim();
   if (!familleId) throw new ErreurNonConfigure("Application non configurée : FAMILLE_ID manquant.");
   const projectId = env.FIRESTORE_PROJECT_ID?.trim();
   if (!banque && !projectId) throw new ErreurNonConfigure("Application non configurée : FIRESTORE_PROJECT_ID manquant.");
   let depot: DepotFirestore;
+  let famille: Famille;
   try {
-    depot = new DepotFirestore(banque ?? (await ouvrirBanqueFirestore(projectId)), familleId);
-    await depot.lireFamille();
+    depot = new DepotFirestore(banque ?? (await banqueUnique(projectId!)), familleId);
+    famille = await depot.lireFamille();
   } catch (e) {
     if (e instanceof ErreurDomaine) {
       throw new ErreurNonConfigure(
@@ -39,5 +72,5 @@ export async function obtenirDepot(date: DateJour, env: Env = process.env, banqu
     }
     throw e;
   }
-  return depot;
+  return { depot, famille };
 }

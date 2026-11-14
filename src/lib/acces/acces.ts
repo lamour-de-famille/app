@@ -49,13 +49,17 @@ export function resoudreAcces(p: {
     const demande = p.adulteParam && ids.includes(p.adulteParam) ? p.adulteParam : ids[0]!;
     return { ok: true, adulteId: demande, demo: true };
   }
-  const session = lireSession(p.jeton, p.cle ?? p.env.SESSION_SECRET);
-  if (!session || !estAutorise(session.email, listeAutorisee(p.env.ALLOWED_EMAILS))) {
-    return { ok: false, redirection: "/connexion" };
-  }
+  const session = sessionAutorisee(p.env, p.jeton, p.cle);
+  if (!session) return { ok: false, redirection: "/connexion" };
   const adulteId = adulteDepuisEmail(session.email, p.famille, p.env.ADULTES_EMAILS);
   // Compte autorisé mais sans adulte rattaché : message explicite (pas de boucle silencieuse).
   return adulteId ? { ok: true, adulteId, demo: false } : { ok: false, redirection: "/connexion?erreur=adulte-absent" };
+}
+
+/** Vérification pure et sans coût (ni base ni réseau) : session valide ET e-mail autorisé, sinon null. */
+export function sessionAutorisee(env: Env, jeton: string | undefined, cle?: string) {
+  const session = lireSession(jeton, cle ?? env.SESSION_SECRET);
+  return session && estAutorise(session.email, listeAutorisee(env.ALLOWED_EMAILS)) ? session : null;
 }
 
 /** Session valide ou null. Sans jeton, ou si le secret manque ou est trop court : pas de session (jamais d'erreur 500). */

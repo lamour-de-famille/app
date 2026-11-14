@@ -95,7 +95,7 @@ describe("choisirVuePlanning : détail du jour", () => {
     });
     const d = choisirVuePlanning({ ...base, transferts: [t("a", "2026-11-13"), t("b", "2026-11-14")] }).detail;
     expect(d.transferts.map((x) => x.id)).toEqual(["a"]);
-    expect(d.transferts[0]).toMatchObject({ lieu: "École du Tilleul", depose: "vous", recupere: "Sam" });
+    expect(d.transferts[0]).toMatchObject({ lieu: "École Exemple", depose: "vous", recupere: "Sam" });
   });
 });
 

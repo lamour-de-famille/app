@@ -10,7 +10,7 @@
     { "id": "mila", "prenom": "Mila", "couleur": "#FF2E88" }
   ],
   "lieux": [
-    { "id": "ecole", "type": "ecole", "libelle": "École du Tilleul" },
+    { "id": "ecole", "type": "ecole", "libelle": "École Exemple" },
     { "id": "dom-alex", "type": "domicile_a", "libelle": "Chez Alex" },
     { "id": "dom-sam", "type": "domicile_b", "libelle": "Chez Sam" }
   ]

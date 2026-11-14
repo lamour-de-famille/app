@@ -25,3 +25,11 @@ Les pages Aujourd'hui et Planning étaient masquées en production par un `notFo
 ## Conséquences
 
 La famille vient toujours de la base hors démonstration. Sans amorçage, l'application affiche « application non configurée ».
+
+## Avertissement : MODE_DEMO
+
+`MODE_DEMO=1` hors production ouvre toutes les pages protégées **sans session** (adulte choisi par `?adulte=`) et sert le dépôt de démonstration. Il ne doit jamais être activé sur un déploiement exposé (préproduction publique, tunnel, serveur partagé) : réservé au poste local de développement. En production (`NODE_ENV=production`) il est ignoré.
+
+## Ordre de la garde et banque unique
+
+Hors démonstration, la garde vérifie d'abord le jeton de session et `ALLOWED_EMAILS` (pur, sans coût) ; sans session valide, elle redirige vers `/connexion` sans ouvrir ni lire la base. Ensuite seulement le dépôt est ouvert et la famille lue une fois ; la garde rend dépôt et famille aux pages et actions. Le client Firestore est une instance unique par processus (`banqueUnique`).

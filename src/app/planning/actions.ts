@@ -2,7 +2,6 @@
 import { redirect } from "next/navigation";
 import { ErreurDomaine } from "@/lib/domaine/depot";
 import { construireDemande } from "@/lib/vues/echange";
-import { obtenirDepot } from "@/lib/acces/depot";
 import { exigerAdulte } from "@/lib/acces/serveur";
 
 function aujourdhuiLocal(): string {
@@ -24,14 +23,13 @@ function retour(demo: string | null, mois: string, resultat: string): never {
 }
 
 export async function repondreDemande(f: FormData) {
-  const { adulteId: adulte, demo } = await exigerAdulte(aujourdhuiLocal(), texte(f, "adulte"));
+  const { adulteId: adulte, demo, depot } = await exigerAdulte(aujourdhuiLocal(), texte(f, "adulte"));
   const marque = demo ? adulte : null;
   const mois = texte(f, "mois");
   const reponse = texte(f, "reponse");
   if (reponse !== "acceptee" && reponse !== "refusee") retour(marque, mois, "erreur-reponse");
   let issue: string;
   try {
-    const depot = await obtenirDepot(aujourdhuiLocal());
     await depot.repondreEchange(adulte, texte(f, "demande"), reponse as "acceptee" | "refusee");
     issue = reponse as string;
   } catch (e) {
@@ -41,13 +39,11 @@ export async function repondreDemande(f: FormData) {
 }
 
 export async function proposerEchange(f: FormData) {
-  const { adulteId: adulte, demo } = await exigerAdulte(aujourdhuiLocal(), texte(f, "adulte"));
+  const { adulteId: adulte, demo, depot, famille } = await exigerAdulte(aujourdhuiLocal(), texte(f, "adulte"));
   const marque = demo ? adulte : null;
   const mois = texte(f, "mois");
   let issue = "erreur";
   try {
-    const depot = await obtenirDepot(aujourdhuiLocal());
-    const famille = await depot.lireFamille();
     const r = construireDemande({
       famille,
       adulteId: adulte,

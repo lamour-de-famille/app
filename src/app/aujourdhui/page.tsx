@@ -1,7 +1,6 @@
 import { Carte } from "@/components/Carte";
 import { ListeAffaires } from "@/components/ListeAffaires";
 import { PastilleEnfant } from "@/components/PastilleEnfant";
-import { obtenirDepot } from "@/lib/acces/depot";
 import { exigerAdulte } from "@/lib/acces/serveur";
 import { chargerAujourdhui } from "@/lib/vues/chargeur";
 
@@ -22,8 +21,8 @@ const formatDate = (iso: string) =>
 export default async function Aujourdhui({ searchParams }: { searchParams: Promise<{ adulte?: string }> }) {
   const { adulte } = await searchParams;
   const date = aujourdhuiLocal();
-  const { adulteId } = await exigerAdulte(date, adulte);
-  const vue = await chargerAujourdhui(await obtenirDepot(date), adulteId, date);
+  const { adulteId, depot } = await exigerAdulte(date, adulte);
+  const vue = await chargerAujourdhui(depot, adulteId, date);
   const t = vue.prochainTransfert;
 
   return (

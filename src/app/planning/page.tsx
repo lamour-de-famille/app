@@ -2,7 +2,6 @@ import Link from "next/link";
 import { Bouton } from "@/components/Bouton";
 import { Carte } from "@/components/Carte";
 import { RepereEnfant } from "@/components/RepereEnfant";
-import { obtenirDepot } from "@/lib/acces/depot";
 import { exigerAdulte } from "@/lib/acces/serveur";
 import { chargerPlanning } from "@/lib/vues/chargeur-planning";
 import { analyserMois, dateValide } from "@/lib/vues/mois";
@@ -57,7 +56,7 @@ type Params = { adulte?: string; mois?: string; jour?: string; resultat?: string
 export default async function Planning({ searchParams }: { searchParams: Promise<Params> }) {
   const q = await searchParams;
   const aujourdhui = aujourdhuiLocal();
-  const { adulteId, demo } = await exigerAdulte(aujourdhui, q.adulte);
+  const { adulteId, demo, depot, famille } = await exigerAdulte(aujourdhui, q.adulte);
   const { annee, mois } = analyserMois(q.mois, aujourdhui.slice(0, 7));
   const moisTexte = `${annee}-${String(mois).padStart(2, "0")}`;
   const jour =
@@ -67,11 +66,7 @@ export default async function Planning({ searchParams }: { searchParams: Promise
         ? aujourdhui
         : `${moisTexte}-01`;
 
-  const depot = await obtenirDepot(aujourdhui);
-  const [vue, famille] = await Promise.all([
-    chargerPlanning(depot, adulteId, annee, mois, jour),
-    depot.lireFamille(),
-  ]);
+  const vue = await chargerPlanning(depot, adulteId, annee, mois, jour);
   const lien = (m: string, j?: string) => {
     const p = new URLSearchParams({ mois: m });
     if (demo) p.set("adulte", adulteId);
