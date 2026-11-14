@@ -61,12 +61,14 @@ export class ServiceNotifications {
 
     // Réservation atomique avant tout envoi : des appels parallèles ne dépassent pas le plafond.
     if (!(await this.d.compteur.reserver(cle, this.max))) {
-      const { texte } = await this.rediger(demande);
+      // Pas d'appel à Gemini ici : la rédaction se fait au récapitulatif, le plafond IA reste intact.
+      const texte = texteCourt(demande.sujet ?? "") || TEXTE_DE_REPLI;
       await this.d.file.ajouter({ destinataireId, jour, texte, evenementId: evenement?.id });
       await this.marquer(demande);
       return { statut: "regroupee", texte };
     }
 
+    let livres = 0;
     try {
       const appareils = await this.d.abonnements.lister(destinataireId);
       if (appareils.length === 0) {
@@ -75,23 +77,33 @@ export class ServiceNotifications {
       }
       const { texte, source } = await this.rediger(demande);
       const contenu: ContenuPush = { titre: TITRE, corps: texte };
-      let livres = 0;
       for (const a of appareils) {
         try {
           await this.d.envoyeur.envoyer(a, contenu);
           livres++;
         } catch (e) {
-          if (e instanceof AbonnementExpire) await this.d.abonnements.retirer(destinataireId, a.endpoint);
+          if (e instanceof AbonnementExpire) {
+            try {
+              await this.d.abonnements.retirer(destinataireId, a.endpoint);
+            } catch {
+              console.error("Notifications : retrait d'un abonnement expiré impossible.");
+            }
+          }
         }
       }
       if (livres === 0) {
         await this.d.compteur.liberer(cle);
         return { statut: "echec_envoi" };
       }
-      await this.marquer(demande);
+      try {
+        await this.marquer(demande);
+      } catch {
+        // Déjà livrée : la place reste prise (pas de renvoi ni de dépassement du plafond).
+        console.error("Notifications : marquage de l'événement impossible après envoi.");
+      }
       return { statut: "envoyee", texte, source, appareils: livres };
     } catch (e) {
-      await this.d.compteur.liberer(cle);
+      if (livres === 0) await this.d.compteur.liberer(cle);
       throw e;
     }
   }

@@ -10,9 +10,11 @@ import type { AbonnementPush } from "./types";
 
 const abo = (n: string): AbonnementPush => ({ endpoint: `https://push.exemple.invalid/${n}`, keys: { p256dh: "cle", auth: "auth" } });
 
-function monter(options: { gemini?: ClientGemini; date?: { v: Date }; max?: number } = {}) {
+function monter(
+  options: { gemini?: ClientGemini; date?: { v: Date }; max?: number; marquerNotifie?: (d: string, e: string) => Promise<void>; abonnements?: StockageAbonnementsMemoire } = {},
+) {
   const date = options.date ?? { v: new Date("2026-11-14T10:00:00Z") };
-  const abonnements = new StockageAbonnementsMemoire();
+  const abonnements = options.abonnements ?? new StockageAbonnementsMemoire();
   const envoyeur = new EnvoyeurPushFactice();
   const file = new FileRegroupementMemoire();
   const gemini = options.gemini ?? new ClientGeminiFactice();
@@ -25,7 +27,7 @@ function monter(options: { gemini?: ClientGemini; date?: { v: Date }; max?: numb
     file,
     configuration: options.max ? { maxParJour: options.max } : undefined,
     maintenant: () => date.v,
-    marquerNotifie: async (d, e) => void marques.push(`${d}:${e}`),
+    marquerNotifie: options.marquerNotifie ?? (async (d, e) => void marques.push(`${d}:${e}`)),
   });
   return { service, abonnements, envoyeur, file, date, marques };
 }
@@ -85,6 +87,15 @@ describe("ServiceNotifications", () => {
     expect((await abonnements.lister("alex")).map((a) => a.endpoint)).toEqual([abo("vivant").endpoint]);
   });
 
+  it("retire aussi l'abonnement introuvable (404 traité comme expiré)", async () => {
+    const { service, abonnements, envoyeur } = monter();
+    await abonnements.ajouter("alex", abo("mort"));
+    await abonnements.ajouter("alex", abo("vivant"));
+    envoyeur.expires.add(abo("mort").endpoint); // l'envoyeur réel convertit 404 et 410 en AbonnementExpire
+    expect((await service.notifier({ destinataireId: "alex" })).statut).toBe("envoyee");
+    expect((await abonnements.lister("alex")).map((a) => a.endpoint)).toEqual([abo("vivant").endpoint]);
+  });
+
   it("panne transitoire sur tous les appareils : échec, abonnement gardé, compteur rendu", async () => {
     const { service, abonnements, envoyeur } = monter({ max: 1 });
     await abonnements.ajouter("alex", abo("a1"));
@@ -128,6 +139,53 @@ describe("ServiceNotifications", () => {
   });
 
   describe("plafond de 10 par jour et par destinataire", () => {
+    const ev = { id: "e", entreeId: "t1", destinataireId: "alex", quand: "2026-11-14T09:00:00Z" };
+
+    it("marquerNotifie qui lève après un envoi réussi : la place reste prise, le 11e est regroupé", async () => {
+      const { service, abonnements, envoyeur } = monter({ marquerNotifie: async () => { throw new Error("panne base"); } });
+      await abonnements.ajouter("alex", abo("a1"));
+      expect((await service.notifier({ destinataireId: "alex", evenement: ev })).statut).toBe("envoyee");
+      for (let i = 0; i < 9; i++) expect((await service.notifier({ destinataireId: "alex" })).statut).toBe("envoyee");
+      expect(envoyeur.envois).toHaveLength(10);
+      expect((await service.notifier({ destinataireId: "alex" })).statut).toBe("regroupee");
+      expect(envoyeur.envois).toHaveLength(10);
+    });
+
+    it("retirer qui lève après un envoi réussi : la place reste prise, le 11e est regroupé", async () => {
+      const abonnements = new StockageAbonnementsMemoire();
+      abonnements.retirer = async () => { throw new Error("panne base"); };
+      const { service, envoyeur } = monter({ abonnements });
+      await abonnements.ajouter("alex", abo("mort"));
+      await abonnements.ajouter("alex", abo("vivant"));
+      envoyeur.expires.add(abo("mort").endpoint);
+      expect((await service.notifier({ destinataireId: "alex" })).statut).toBe("envoyee");
+      envoyeur.expires.clear();
+      for (let i = 0; i < 9; i++) await service.notifier({ destinataireId: "alex" });
+      const avant = envoyeur.envois.length;
+      expect((await service.notifier({ destinataireId: "alex" })).statut).toBe("regroupee");
+      expect(envoyeur.envois).toHaveLength(avant);
+    });
+
+    it("le chemin regroupé n'appelle pas Gemini", async () => {
+      let appels = 0;
+      const base = new ClientGeminiFactice();
+      const gemini: ClientGemini = {
+        traiterDictee: (d) => base.traiterDictee(d),
+        rediger: async (d) => {
+          appels++;
+          return base.rediger(d);
+        },
+      };
+      const { service, abonnements, file } = monter({ gemini, max: 1 });
+      await abonnements.ajouter("alex", abo("a1"));
+      await service.notifier({ destinataireId: "alex" });
+      expect(appels).toBe(1);
+      const r = await service.notifier({ destinataireId: "alex", sujet: "nouvelle tâche pour Léo" });
+      expect(r).toMatchObject({ statut: "regroupee", texte: "nouvelle tâche pour Léo" });
+      expect(appels).toBe(1);
+      expect(await file.lister("alex")).toHaveLength(1);
+    });
+
     it("la 10e passe, la 11e est regroupée sans envoi", async () => {
       const { service, abonnements, envoyeur, file, marques } = monter();
       await abonnements.ajouter("alex", abo("a1"));
