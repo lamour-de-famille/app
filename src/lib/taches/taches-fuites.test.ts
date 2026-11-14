@@ -51,6 +51,22 @@ describe("écritures sur le passé de l'autre adulte : pas de fuite", () => {
         expect(await d.lister()).toHaveLength(0);
       });
 
+      it("l'assigné qui passe une tâche passée à l'autre : aucun statut ni retard ne suit", async () => {
+        const d = nouveau();
+        const faite = await d.enregistrer(proprio, { titre: "F", assigneId: proprio, echeance: "2026-11-03" });
+        const pasFaite = await d.enregistrer(proprio, { titre: "N", assigneId: proprio, echeance: "2026-11-03" });
+        const s = await d.enregistrer(proprio, { titre: "S", assigneId: proprio, echeance: "2026-11-02", recurrence: SERIE });
+        await d.cocher(proprio, faite.id);
+        await d.cocher(proprio, s.id, "2026-11-05");
+        for (const t of [faite, pasFaite]) await d.enregistrer(proprio, { id: t.id, titre: "x", assigneId: intrus, echeance: "2026-11-03" });
+        await d.enregistrer(proprio, { id: s.id, titre: "S", assigneId: intrus, echeance: "2026-11-02", recurrence: SERIE });
+        const [a, b, c] = await d.lister();
+        expect(a).toMatchObject({ statut: "a_faire" });
+        expect(b).toMatchObject({ statut: "a_faire" });
+        expect(a!.faiteLe).toBeUndefined();
+        expect(c!.exceptions ?? []).toEqual([]);
+      });
+
       it("l'assigné modifie librement le passé de sa propre tâche", async () => {
         const d = nouveau();
         const p = await d.enregistrer(proprio, { titre: "P", assigneId: proprio, echeance: "2026-11-03" });

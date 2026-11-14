@@ -89,10 +89,10 @@ export class DepotTachesMemoire implements DepotTaches {
       }
       // Déplacer ou réassigner la tâche de l'autre : on repart de zéro (aucun statut ni exception ne suit).
       if (
-        existante.assigneId !== auteurId &&
-        (existante.assigneId !== tache.assigneId ||
-          existante.echeance !== tache.echeance ||
-          JSON.stringify(existante.recurrence) !== JSON.stringify(tache.recurrence))
+        existante.assigneId !== tache.assigneId ||
+        (existante.assigneId !== auteurId &&
+          (existante.echeance !== tache.echeance ||
+            JSON.stringify(existante.recurrence) !== JSON.stringify(tache.recurrence)))
       ) {
         tache.statut = "a_faire";
         delete tache.faiteLe;
