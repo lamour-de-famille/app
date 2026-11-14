@@ -2,6 +2,7 @@
 import { redirect } from "next/navigation";
 import { ErreurDomaine } from "@/lib/domaine/depot";
 import { construireDemande } from "@/lib/vues/echange";
+import { synchroApresModification } from "@/lib/agenda/declenchement";
 import { exigerAdulte } from "@/lib/acces/serveur";
 
 function aujourdhuiLocal(): string {
@@ -32,6 +33,7 @@ export async function repondreDemande(f: FormData) {
   try {
     await depot.repondreEchange(adulte, texte(f, "demande"), reponse as "acceptee" | "refusee");
     issue = reponse as string;
+    void synchroApresModification({ depot: async () => depot });
   } catch (e) {
     issue = e instanceof ErreurDomaine ? "erreur-reponse" : "erreur";
   }
@@ -55,6 +57,7 @@ export async function proposerEchange(f: FormData) {
     if (r.ok) {
       await depot.proposerEchange(adulte, r.demande);
       issue = "proposee";
+      void synchroApresModification({ depot: async () => depot });
     } else {
       issue = r.code;
     }
