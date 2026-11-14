@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { familleFictive } from "../domaine/fixture-famille";
 import { ClientGeminiFactice } from "./client-gemini-factice";
-import { configurationIADepuisEnv, MODELE_PAR_DEFAUT, SEUILS_PAR_DEFAUT } from "./configuration";
+import { configurationIADepuisEnv, MAX_OCTETS_AUDIO_PAR_DEFAUT, MODELE_PAR_DEFAUT, SEUILS_PAR_DEFAUT } from "./configuration";
 import { clesPeriode, ClientGeminiPlafonne, PlafondAtteint, PlafondIA, StockageUsageIAMemoire } from "./plafond";
 import { SortieDicteeInvalide } from "./sortie-dictee";
 import type { DemandeDictee } from "./types";
@@ -26,7 +26,7 @@ function monter(seuils: Partial<typeof grand>, horloge: { t: Date }, factice = n
 
 describe("configuration", () => {
   it("défauts et surcharges", () => {
-    expect(configurationIADepuisEnv({})).toEqual({ modele: MODELE_PAR_DEFAUT, seuils: SEUILS_PAR_DEFAUT });
+    expect(configurationIADepuisEnv({})).toEqual({ modele: MODELE_PAR_DEFAUT, seuils: SEUILS_PAR_DEFAUT, maxOctetsAudio: MAX_OCTETS_AUDIO_PAR_DEFAUT });
     const c = configurationIADepuisEnv({ GEMINI_MODEL: " m-test ", IA_MAX_REQUETES_JOUR: "3", IA_MAX_JETONS_SORTIE_MOIS: "abc", IA_MAX_JETONS_ENTREE_JOUR: "-5" });
     expect(c.modele).toBe("m-test");
     expect(c.seuils.maxRequetesJour).toBe(3);

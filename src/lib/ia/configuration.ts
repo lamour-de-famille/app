@@ -19,9 +19,24 @@ export interface SeuilsIA {
   jetonsSortieReservesParAppel: number;
 }
 
+/** Bornes d'un appel : la taille de la réponse (réflexion comprise) et la réflexion sont limitées, donc le coût aussi. */
+export interface LimitesAppel {
+  /** Jetons de sortie maximaux, réflexion comprise (alignés sur la réservation du plafond). */
+  maxOutputTokens: number;
+  /** Jetons de réflexion maximaux. */
+  thinkingBudget: number;
+}
+
+export const LIMITES_DICTEE: LimitesAppel = { maxOutputTokens: 4_000, thinkingBudget: 1_024 };
+export const LIMITES_REDACTION: LimitesAppel = { maxOutputTokens: 2_048, thinkingBudget: 512 };
+
+/** Taille maximale de l'audio d'une dictée (octets) : environ quelques minutes d'audio compressé. */
+export const MAX_OCTETS_AUDIO_PAR_DEFAUT = 5 * 1024 * 1024;
+
 export interface ConfigurationIA {
   modele: string;
   seuils: SeuilsIA;
+  maxOctetsAudio: number;
 }
 
 export const SEUILS_PAR_DEFAUT: SeuilsIA = {
@@ -47,6 +62,7 @@ export function configurationIADepuisEnv(env: Record<string, string | undefined>
   const d = SEUILS_PAR_DEFAUT;
   return {
     modele: env.GEMINI_MODEL?.trim() || MODELE_PAR_DEFAUT,
+    maxOctetsAudio: entierPositif(env.IA_MAX_OCTETS_AUDIO, MAX_OCTETS_AUDIO_PAR_DEFAUT),
     seuils: {
       maxRequetesJour: entierPositif(env.IA_MAX_REQUETES_JOUR, d.maxRequetesJour),
       maxJetonsEntreeJour: entierPositif(env.IA_MAX_JETONS_ENTREE_JOUR, d.maxJetonsEntreeJour),

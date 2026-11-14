@@ -1,4 +1,9 @@
+/**
+ * RÉSERVÉ AU SERVEUR : porte la clé API. Ne jamais importer ce module depuis un composant client
+ * ("use client") ni depuis du code livré au navigateur (un test le vérifie).
+ */
 import type { Famille } from "../domaine/types";
+import { LIMITES_DICTEE, LIMITES_REDACTION, type LimitesAppel } from "./configuration";
 import { analyserSortieDictee, SortieDicteeInvalide, verifierIdentifiants } from "./sortie-dictee";
 import type { ClientGemini, DemandeDictee, DemandeRedaction, UsageIA } from "./types";
 
@@ -29,6 +34,10 @@ export function usageDepuisMetadonnees(m: ReponseGemini["usageMetadata"]): Usage
   return { jetonsEntree: entree ?? 0, jetonsSortie: Math.max(sortie, deduit) };
 }
 
+function configGeneration(l: LimitesAppel) {
+  return { maxOutputTokens: l.maxOutputTokens, thinkingConfig: { thinkingBudget: l.thinkingBudget } };
+}
+
 function contexteFamilial(f: Famille): string {
   const adultes = f.adultes.map((a) => `${a.id} (${a.prenom})`).join(", ");
   const enfants = f.enfants.map((e) => `${e.id} (${e.prenom})`).join(", ");
@@ -43,6 +52,7 @@ export class ClientGeminiHttp implements ClientGemini {
     private readonly modele: string,
     private readonly appeler: typeof fetch = fetch,
     private readonly delaiMs: number = DELAI_APPEL_MS,
+    private readonly limites: { dictee: LimitesAppel; redaction: LimitesAppel } = { dictee: LIMITES_DICTEE, redaction: LIMITES_REDACTION },
   ) {
     if (!cle) throw new Error("GEMINI_API_KEY manquante.");
   }
@@ -72,7 +82,7 @@ export class ClientGeminiHttp implements ClientGemini {
           ],
         },
       ],
-      generationConfig: { responseMimeType: "application/json" },
+      generationConfig: { responseMimeType: "application/json", ...configGeneration(this.limites.dictee) },
     });
     // Réponse reçue donc facturée : une sortie refusée porte l'usage pour que le plafond le compte.
     try {
@@ -87,6 +97,7 @@ export class ClientGeminiHttp implements ClientGemini {
 
   async rediger(d: DemandeRedaction) {
     const { texte, usage } = await this.generer({
+      generationConfig: configGeneration(this.limites.redaction),
       contents: [{ role: "user", parts: [{ text: `${d.consigne}\n\nContexte :\n${d.contexte}` }] }],
     });
     return { texte: texte.trim(), usage };
