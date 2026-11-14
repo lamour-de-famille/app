@@ -56,6 +56,14 @@ export class PropositionIntrouvable extends Error {
   }
 }
 
+/** Production sans clé Gemini (GEMINI_API_KEY) : on ne tente aucun appel, la route répond 503 avec un message propre. */
+export class DicteeNonConfiguree extends Error {
+  constructor() {
+    super("Dictée non configurée.");
+    this.name = "DicteeNonConfiguree";
+  }
+}
+
 export class ChoixInvalide extends Error {
   constructor(public readonly problemes: string[]) {
     super(`Choix invalide : ${problemes.join(" ; ")}`);

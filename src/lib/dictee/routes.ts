@@ -13,13 +13,13 @@ import { configurationIADepuisEnv } from "../ia/configuration";
 import { PlafondAtteint } from "../ia/plafond";
 import { SortieDicteeInvalide } from "../ia/sortie-dictee";
 import type { DicteeService } from "./service";
-import { AudioInvalide, ChoixInvalide, PropositionIntrouvable, type Retenus } from "./types";
+import { AudioInvalide, ChoixInvalide, DicteeNonConfiguree, PropositionIntrouvable, type Retenus } from "./types";
 
 export interface DependancesRoutes {
   env: Env;
   banque?: Banque;
   /** Construit le service pour la requête ; les stockages et clients qu'il utilise sont partagés. */
-  service(contexte: { depot: DepotFamille; env: Env }): Promise<DicteeService>;
+  service(contexte: { depot: DepotFamille; env: Env; banque?: Banque }): Promise<DicteeService>;
 }
 
 const json = (corps: unknown, status: number) => Response.json(corps, { status, headers: { "cache-control": "no-store" } });
@@ -53,6 +53,7 @@ async function entrer(request: Request, d: DependancesRoutes) {
 /** Correspondance erreur -> réponse propre en français ; rien d'interne n'est exposé. */
 function repondreErreur(e: unknown): Response {
   if (e instanceof PlafondAtteint) return erreur(429, "plafond_atteint", e.message);
+  if (e instanceof DicteeNonConfiguree) return erreur(503, "dictee_non_configuree", "Dictée non configurée.");
   if (e instanceof ErreurNonConfigure) return erreur(503, "non_configure", "Service indisponible : application non configurée.");
   if (e instanceof AudioInvalide) return erreur(e.raison === "trop_gros" ? 413 : 400, `audio_${e.raison}`, e.message);
   if (e instanceof SortieDicteeInvalide) return erreur(502, "sortie_invalide", "L'assistant n'a pas pu comprendre la dictée. Rien n'a été enregistré, réessayez.");
@@ -98,7 +99,7 @@ export async function traiterProposer(request: Request, d: DependancesRoutes): P
     const max = configurationIADepuisEnv(d.env).maxOctetsAudio;
     const octets = await lireCorpsBorne(request, max);
     if (octets === null) return erreur(413, "audio_trop_gros", `L'enregistrement est trop long (maximum ${Math.floor(max / (1024 * 1024))} Mo).`);
-    const service = await d.service({ depot: e.acces.depot, env: d.env });
+    const service = await d.service({ depot: e.acces.depot, env: d.env, banque: d.banque });
     const proposition = await service.proposer({ auteurId: e.acces.adulteId, audio: { octets, mimeType: request.headers.get("content-type") ?? "" } });
     return json(proposition, 200);
   } catch (err) {
@@ -125,7 +126,7 @@ export async function traiterValider(request: Request, d: DependancesRoutes): Pr
     if (typeof c !== "object" || c === null || typeof c.propositionId !== "string" || typeof c.retenus !== "object" || c.retenus === null) {
       return erreur(400, "json_invalide", "Requête illisible.");
     }
-    const service = await d.service({ depot: e.acces.depot, env: d.env });
+    const service = await d.service({ depot: e.acces.depot, env: d.env, banque: d.banque });
     const resultat = await service.valider({ auteurId: e.acces.adulteId, propositionId: c.propositionId, retenus: c.retenus as Retenus });
     return json(resultat, 200);
   } catch (err) {

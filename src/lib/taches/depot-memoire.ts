@@ -9,21 +9,38 @@ export { dateReelle };
 
 const copie = <T>(v: T): T => structuredClone(v);
 
+/** Jour (AAAA-MM-JJ) d'un instant, dans le fuseau Europe/Paris. */
+export const jourParis = (d: Date): DateJour => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(d);
+
 export interface OptionsDepotTachesMemoire {
   /** Horloge injectable (tests). */
   maintenant?: () => Date;
+  /** Générateur d'ids (défaut : séquentiel `tache-N`). La version Firestore injecte des UUID non devinables. */
+  genererId?: () => string;
 }
 
 export class DepotTachesMemoire implements DepotTaches {
   private taches = new Map<string, Tache>();
   private compteur = 0;
   private readonly maintenant: () => Date;
+  private readonly genererId: () => string;
 
   constructor(
     private readonly famille: Famille,
     options: OptionsDepotTachesMemoire = {},
   ) {
     this.maintenant = options.maintenant ?? (() => new Date());
+    this.genererId = options.genererId ?? (() => `tache-${++this.compteur}`);
+  }
+
+  /** Remplace les tâches (chargement depuis un stockage persistant). */
+  restaurerEtat(taches: Tache[]): void {
+    this.taches = new Map(taches.map((t) => [t.id, copie(t)]));
+  }
+
+  /** Tâches par id, pour écrire les différences dans un stockage persistant. */
+  exporterEtat(): Record<string, Tache> {
+    return Object.fromEntries([...this.taches].map(([id, t]) => [id, copie(t)]));
   }
 
   private verifierAdulte(id: string, role: string) {
@@ -67,7 +84,7 @@ export class DepotTachesMemoire implements DepotTaches {
     if (nouvelle.id && (!existante || this.passeDeLAutre(auteurId, existante))) {
       throw new ErreurDomaine(`Tâche inconnue : ${nouvelle.id}`);
     }
-    const id = nouvelle.id ?? `tache-${++this.compteur}`;
+    const id = nouvelle.id ?? this.genererId();
     // Liste blanche : rien d'autre que ces champs ne vient de l'appelant.
     const r = nouvelle.recurrence;
     const champs: Omit<Tache, "statut" | "creeParId"> = {
@@ -117,7 +134,7 @@ export class DepotTachesMemoire implements DepotTaches {
 
   /** Jour courant (fuseau Europe/Paris), au format AAAA-MM-JJ, d'après l'horloge du dépôt. */
   aujourdhui(): DateJour {
-    return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(this.maintenant());
+    return jourParis(this.maintenant());
   }
 
   private modifierStatut(auteurId: string, tacheId: string, date: DateJour | undefined, faite: boolean): AccuseTache {
