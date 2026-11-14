@@ -5,9 +5,12 @@ import { declencherSynchroAgenda, type DependancesSynchro } from "./declenchemen
 
 const empreinte = (s: string) => createHash("sha256").update(s).digest();
 
-/** `Authorization: Bearer <secret>` comparé à temps constant. Un secret attendu vide refuse toujours. */
+/** Longueur minimale du secret attendu (comme SESSION_SECRET). */
+const LONGUEUR_MIN_SECRET = 32;
+
+/** `Authorization: Bearer <secret>` comparé à temps constant. Un secret attendu vide ou de moins de 32 caractères refuse toujours. */
 export function secretValide(entete: string | null, attendu: string | undefined): boolean {
-  if (!attendu || !entete) return false;
+  if (!attendu || attendu.length < LONGUEUR_MIN_SECRET || !entete) return false;
   const m = /^Bearer (.+)$/.exec(entete);
   if (!m) return false;
   return timingSafeEqual(empreinte(m[1]!), empreinte(attendu));

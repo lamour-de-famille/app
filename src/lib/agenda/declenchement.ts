@@ -62,12 +62,12 @@ export interface DependancesSynchro {
 }
 
 /**
- * À appeler après une écriture, sans `await` côté action. Ne lève jamais : l'échec est journalisé
+ * À appeler après une écriture, sans `await` côté action. `deps` remplace en partie les dépendances de production (ex. le dépôt déjà obtenu par la garde). Ne lève jamais : l'échec est journalisé
  * sans donnée sensible (nom de l'erreur seulement, jamais son message).
  */
-export async function synchroApresModification(deps?: DependancesSynchro): Promise<void> {
+export async function synchroApresModification(deps?: Partial<DependancesSynchro>): Promise<void> {
   try {
-    const d = deps ?? (await import("./service-synchro")).dependancesParDefaut();
+    const d = { ...(await import("./service-synchro")).dependancesParDefaut(), ...deps };
     await declencherSynchroAgenda({ ...d, depot: await d.depot() });
   } catch (e) {
     console.error("[synchro] échec de la synchro Agenda", e instanceof Error ? e.name : "inconnue");

@@ -15,3 +15,5 @@ Statut : accepté (2026-11-13)
 ## Conséquences
 
 Un événement dont la marque est retirée à la main dans Google est recréé au passage suivant. Le déclenchement (à chaque écriture, ou périodique), le stockage des jetons de rafraîchissement et la fenêtre de dates synchronisée restent à décider.
+
+Suite : le déclenchement de la synchro (après écriture, route Cloud Scheduler, verrou) est décidé dans l'[ADR 0011](0011-declenchement-synchro.md).

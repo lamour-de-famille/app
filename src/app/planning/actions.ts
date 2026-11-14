@@ -2,10 +2,8 @@
 import { redirect } from "next/navigation";
 import { ErreurDomaine } from "@/lib/domaine/depot";
 import { construireDemande } from "@/lib/vues/echange";
-import { depotPartage } from "@/lib/vues/chargeur-planning";
 import { synchroApresModification } from "@/lib/agenda/declenchement";
-
-const ADULTES_DEMO = ["alex", "sam"];
+import { exigerAdulte } from "@/lib/acces/serveur";
 
 function aujourdhuiLocal(): string {
   const d = new Date();
@@ -18,44 +16,36 @@ const texte = (f: FormData, nom: string) => {
   return typeof v === "string" ? v : "";
 };
 
-function retour(adulte: string, mois: string, resultat: string): never {
-  const q = new URLSearchParams({ adulte, resultat });
+function retour(demo: string | null, mois: string, resultat: string): never {
+  const q = new URLSearchParams({ resultat });
+  if (demo) q.set("adulte", demo);
   if (/^\d{4}-\d{2}$/.test(mois)) q.set("mois", mois);
   redirect(`/planning?${q.toString()}`);
 }
 
-/** Doublure d'authentification : l'adulte vient du formulaire tant que l'auth réelle n'existe pas. */
-function adulteDe(f: FormData): string {
-  const a = texte(f, "adulte");
-  return ADULTES_DEMO.includes(a) ? a : "alex";
-}
-
 export async function repondreDemande(f: FormData) {
-  if (process.env.NODE_ENV === "production") redirect("/aujourdhui");
-  const adulte = adulteDe(f);
+  const { adulteId: adulte, demo, depot } = await exigerAdulte(aujourdhuiLocal(), texte(f, "adulte"));
+  const marque = demo ? adulte : null;
   const mois = texte(f, "mois");
   const reponse = texte(f, "reponse");
-  if (reponse !== "acceptee" && reponse !== "refusee") retour(adulte, mois, "erreur-reponse");
+  if (reponse !== "acceptee" && reponse !== "refusee") retour(marque, mois, "erreur-reponse");
   let issue: string;
   try {
-    const depot = await depotPartage(aujourdhuiLocal());
     await depot.repondreEchange(adulte, texte(f, "demande"), reponse as "acceptee" | "refusee");
     issue = reponse as string;
-    void synchroApresModification();
+    void synchroApresModification({ depot: async () => depot });
   } catch (e) {
     issue = e instanceof ErreurDomaine ? "erreur-reponse" : "erreur";
   }
-  retour(adulte, mois, issue);
+  retour(marque, mois, issue);
 }
 
 export async function proposerEchange(f: FormData) {
-  if (process.env.NODE_ENV === "production") redirect("/aujourdhui");
-  const adulte = adulteDe(f);
+  const { adulteId: adulte, demo, depot, famille } = await exigerAdulte(aujourdhuiLocal(), texte(f, "adulte"));
+  const marque = demo ? adulte : null;
   const mois = texte(f, "mois");
   let issue = "erreur";
   try {
-    const depot = await depotPartage(aujourdhuiLocal());
-    const famille = await depot.lireFamille();
     const r = construireDemande({
       famille,
       adulteId: adulte,
@@ -67,12 +57,12 @@ export async function proposerEchange(f: FormData) {
     if (r.ok) {
       await depot.proposerEchange(adulte, r.demande);
       issue = "proposee";
-      void synchroApresModification();
+      void synchroApresModification({ depot: async () => depot });
     } else {
       issue = r.code;
     }
   } catch (e) {
     issue = e instanceof ErreurDomaine ? "invalide" : "erreur";
   }
-  retour(adulte, mois, issue);
+  retour(marque, mois, issue);
 }
