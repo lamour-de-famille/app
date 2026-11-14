@@ -4,3 +4,5 @@ export * from "./service";
 export * from "./stockages-memoire";
 export { EnvoyeurPushFactice } from "./envoyeur-factice";
 export { EnvoyeurPushWebPush, configurationVapidDepuisEnv, type ConfigurationVapid } from "./envoyeur-web-push";
+export * from "./preferences";
+export * from "./recapitulatif";
