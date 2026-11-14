@@ -1,4 +1,4 @@
-import webpush from "web-push";
+import { sendNotification } from "web-push";
 import { AbonnementExpire, type AbonnementPush, type ContenuPush, type EnvoyeurPush } from "./types";
 
 export interface ConfigurationVapid {
@@ -21,7 +21,7 @@ export class EnvoyeurPushWebPush implements EnvoyeurPush {
 
   async envoyer(abonnement: AbonnementPush, contenu: ContenuPush) {
     try {
-      await webpush.sendNotification(abonnement, JSON.stringify(contenu), {
+      await sendNotification(abonnement, JSON.stringify(contenu), {
         vapidDetails: { subject: this.config.sujet, publicKey: this.config.clePublique, privateKey: this.config.clePrivee },
         TTL: 60 * 60 * 12,
         timeout: 15_000,
