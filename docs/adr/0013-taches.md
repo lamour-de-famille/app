@@ -12,7 +12,7 @@ Statut : accepté (2026-11-14)
 
 ## Visibilité : l'à venir est partagé, le retard est privé
 
-`tachesPourAdulte(depot, famille, adulteId, aujourdhui)` est la seule lecture destinée à un écran ; `adulteId` (le demandeur) décide, côté serveur :
+`tachesPourAdulte(depot, famille, adulteId)` est la seule lecture destinée à un écran ; `adulteId` (le demandeur) décide, côté serveur :
 
 | Tâche | Assignée au demandeur | Assignée à l'autre |
 |---|---|---|
@@ -29,6 +29,10 @@ Le retard de l'autre n'est pas calculé (la fenêtre de l'autre commence à aujo
 
 - **Pas de fuite par les écritures** : `enregistrer`, `cocher` et `decocher` renvoient un `AccuseTache` (`id`, et `cle` pour une occurrence), jamais la `Tache` brute (échéance, statut, exceptions révéleraient le retard de l'autre). Seule la couche serveur lit le brut, via `lister`.
 - **Le passé est à l'assigné** : un adulte non assigné ne peut ni cocher ni décocher une occurrence antérieure à aujourd'hui (jour Europe/Paris, horloge `maintenant` du dépôt). Le refus est identique que l'occurrence existe ou non (pas d'oracle). Aujourd'hui, l'avenir et les tâches sans échéance restent ouverts aux deux adultes.
+- **Tâche de l'autre ayant du passé : intouchable** : sur une tâche existante dont l'assigné n'est pas l'auteur et dont l'échéance (ou l'ancre d'une série) est antérieure à aujourd'hui, `enregistrer` (avec id) et `supprimer` sont refusés par la même erreur que « Tâche inconnue : <id> » (aucune différence de message, pas d'oracle sur l'existence ni le statut). Refus complet, pas seulement des champs assigné/échéance/récurrence : plus simple et sûr.
+- **Réinitialisation** : sur une tâche à venir ou sans échéance, si un non-assigné change `assigneId`, `echeance` ou `recurrence`, statut, `faiteLe` et exceptions sont remis à zéro (rien de l'état de l'autre ne suit la tâche). Changer le titre ou l'enfant seul conserve l'état. Choix de la remise à zéro plutôt que du refus : l'avenir reste ouvert aux deux adultes.
+- **Horloge** : `DepotTaches.aujourdhui()` (horloge `maintenant`, jour Europe/Paris) ; `tachesPourAdulte(depot, famille, adulteId, options)` ne prend plus de date de l'appelant, donc aucune date ne vient d'un client.
+- **Oracle résiduel** : les ids sont séquentiels (`tache-N`, devinables). Un non-assigné qui écrit sur un id de l'autre obtient « inconnue » (passé) ou un succès (avenir ou sans échéance) : il apprend qu'une tâche de l'autre a du passé, jamais son statut ni ses dates. À fermer avec des ids non devinables côté Firestore. Cocher/décocher et supprimer ont la même nuance.
 - **Liste blanche** : `enregistrer` ne retient que `titre`, `assigneId`, `echeance`, `recurrence` (`frequence`, `intervalle`, `fin`) et `enfantId`. `creeParId`, `statut`, `faiteLe`, `exceptions` ne viennent jamais de l'appelant. Passer de ponctuelle à série (ou l'inverse) remet le statut à « a_faire ».
 - **Robustesse** : `cocher`/`decocher` valident `date` (date réelle) ; `datesRecurrence` refuse intervalle non entier >= 1 ou dates invalides et démarre l'itération près de la fenêtre (pas de boucle depuis l'ancre) ; `joursRattrapage` doit être un entier >= 0.
 

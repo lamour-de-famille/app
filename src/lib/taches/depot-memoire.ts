@@ -55,10 +55,18 @@ export class DepotTachesMemoire implements DepotTaches {
     return copie([...this.taches.values()]);
   }
 
+  /** Vrai si la tâche a du passé (échéance ou ancre antérieure à aujourd'hui) et que l'auteur n'en est pas l'assigné. */
+  private passeDeLAutre(auteurId: string, t: Tache): boolean {
+    return t.assigneId !== auteurId && t.echeance !== undefined && t.echeance < this.aujourdhui();
+  }
+
   async enregistrer(auteurId: string, nouvelle: NouvelleTache): Promise<AccuseTache> {
     this.valider(auteurId, nouvelle);
     const existante = nouvelle.id ? this.taches.get(nouvelle.id) : undefined;
-    if (nouvelle.id && !existante) throw new ErreurDomaine(`Tâche inconnue : ${nouvelle.id}`);
+    // Erreur unique : id inexistant ou tâche de l'autre ayant du passé (pas d'oracle sur le statut du retard).
+    if (nouvelle.id && (!existante || this.passeDeLAutre(auteurId, existante))) {
+      throw new ErreurDomaine(`Tâche inconnue : ${nouvelle.id}`);
+    }
     const id = nouvelle.id ?? `tache-${++this.compteur}`;
     // Liste blanche : rien d'autre que ces champs ne vient de l'appelant.
     const r = nouvelle.recurrence;
@@ -79,6 +87,17 @@ export class DepotTachesMemoire implements DepotTaches {
         tache.statut = "a_faire";
         delete tache.faiteLe;
       }
+      // Déplacer ou réassigner la tâche de l'autre : on repart de zéro (aucun statut ni exception ne suit).
+      if (
+        existante.assigneId !== auteurId &&
+        (existante.assigneId !== tache.assigneId ||
+          existante.echeance !== tache.echeance ||
+          JSON.stringify(existante.recurrence) !== JSON.stringify(tache.recurrence))
+      ) {
+        tache.statut = "a_faire";
+        delete tache.faiteLe;
+        delete tache.exceptions;
+      }
       // Les champs optionnels absents de la saisie sont retirés (remplacement des champs saisis).
       for (const k of ["echeance", "recurrence", "enfantId"] as const) if (!(k in champs)) delete tache[k];
       // Les exceptions qui ne correspondent plus à la série sont écartées.
@@ -91,11 +110,13 @@ export class DepotTachesMemoire implements DepotTaches {
 
   async supprimer(auteurId: string, id: string): Promise<void> {
     this.verifierAdulte(auteurId, "Auteur");
-    if (!this.taches.delete(id)) throw new ErreurDomaine(`Tâche inconnue : ${id}`);
+    const t = this.taches.get(id);
+    if (!t || this.passeDeLAutre(auteurId, t)) throw new ErreurDomaine(`Tâche inconnue : ${id}`);
+    this.taches.delete(id);
   }
 
-  /** Jour courant (fuseau Europe/Paris), au format AAAA-MM-JJ. */
-  private aujourdhui(): DateJour {
+  /** Jour courant (fuseau Europe/Paris), au format AAAA-MM-JJ, d'après l'horloge du dépôt. */
+  aujourdhui(): DateJour {
     return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(this.maintenant());
   }
 

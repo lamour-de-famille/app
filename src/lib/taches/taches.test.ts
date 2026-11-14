@@ -135,7 +135,7 @@ describe("vues par adulte", () => {
 
   it("sections d'Alex", async () => {
     const { d, retardAlex, auj, semaineSam, retardSam } = await jeu();
-    const v = await tachesPourAdulte(d, famille, "alex", AUJ);
+    const v = await tachesPourAdulte(d, famille, "alex");
     expect(ids(v.aRattraper)).toEqual([retardAlex.id]);
     expect(ids(v.aujourdhui)).toEqual([auj.id]);
     expect(v.cetteSemaine.map((o) => [o.tacheId, o.deLAutre])).toEqual([[semaineSam.id, true]]);
@@ -146,7 +146,7 @@ describe("vues par adulte", () => {
 
   it("CRITIQUE : le retard d'Alex est invisible pour Sam, partout, y compris dans les comptes", async () => {
     const { d, retardAlex } = await jeu();
-    const v = await tachesPourAdulte(d, famille, "sam", AUJ);
+    const v = await tachesPourAdulte(d, famille, "sam");
     expect(JSON.stringify(v)).not.toContain(retardAlex.id);
     expect(JSON.stringify(v)).not.toContain("2026-11-03");
     for (const s of [v.aujourdhui, v.cetteSemaine, v.aRattraper, v.sansEcheance]) {
@@ -162,7 +162,7 @@ describe("vues par adulte", () => {
 
   it("symétrie : le retard de Sam est invisible pour Alex, même pour une série", async () => {
     const { d, serie, retardSam } = await jeu();
-    const v = await tachesPourAdulte(d, famille, "alex", AUJ);
+    const v = await tachesPourAdulte(d, famille, "alex");
     const tout = [...v.aujourdhui, ...v.cetteSemaine, ...v.aRattraper, ...v.sansEcheance];
     expect(tout.filter((o) => o.deLAutre).every((o) => !o.date || o.date >= AUJ)).toBe(true);
     expect(tout.some((o) => o.tacheId === retardSam.id)).toBe(false);
@@ -172,7 +172,7 @@ describe("vues par adulte", () => {
   it("une tâche de l'autre non en retard reste visible, marquée deLAutre", async () => {
     const d = nouveau();
     await d.enregistrer("alex", { titre: "Spectacle", assigneId: "sam", echeance: AUJ });
-    const v = await tachesPourAdulte(d, famille, "alex", AUJ);
+    const v = await tachesPourAdulte(d, famille, "alex");
     expect(v.aujourdhui).toHaveLength(1);
     expect(v.aujourdhui[0]!.deLAutre).toBe(true);
     expect(v.aRattraper).toEqual([]);
@@ -182,33 +182,36 @@ describe("vues par adulte", () => {
     const { d, retardAlex, serie } = await jeu();
     await d.cocher("alex", retardAlex.id);
     await d.cocher("sam", serie.id, "2026-11-02");
-    const a = await tachesPourAdulte(d, famille, "alex", AUJ);
+    const a = await tachesPourAdulte(d, famille, "alex");
     expect(a.aRattraper).toEqual([]);
-    const s = await tachesPourAdulte(d, famille, "sam", AUJ);
+    const s = await tachesPourAdulte(d, famille, "sam");
     expect(s.aRattraper.map((o) => o.cle)).toContain("tache-7@2026-11-09");
     expect(s.aRattraper.map((o) => o.cle)).not.toContain("tache-7@2026-11-02");
   });
 
   it("dimanche : la semaine restante est vide ; lundi : jusqu'au dimanche", async () => {
-    const d = nouveau();
-    await d.enregistrer("alex", { titre: "a", assigneId: "alex", echeance: "2026-11-16" });
-    expect((await tachesPourAdulte(d, famille, "alex", "2026-11-15")).cetteSemaine).toEqual([]);
-    expect((await tachesPourAdulte(d, famille, "alex", "2026-11-16")).aujourdhui).toHaveLength(1);
-    expect((await tachesPourAdulte(d, famille, "alex", "2026-11-09")).cetteSemaine).toEqual([]);
+    const aLa = async (jour: string) => {
+      const d = new DepotTachesMemoire(famille, { maintenant: () => new Date(`${jour}T10:00:00Z`) });
+      await d.enregistrer("alex", { titre: "a", assigneId: "alex", echeance: "2026-11-16" });
+      return tachesPourAdulte(d, famille, "alex");
+    };
+    expect((await aLa("2026-11-15")).cetteSemaine).toEqual([]);
+    expect((await aLa("2026-11-16")).aujourdhui).toHaveLength(1);
+    expect((await aLa("2026-11-09")).cetteSemaine).toEqual([]);
   });
 
   it("limite de rattrapage paramétrable, et demandeur inconnu refusé", async () => {
     const d = nouveau();
     await d.enregistrer("alex", { titre: "q", assigneId: "alex", echeance: "2026-11-01", recurrence: { frequence: "quotidienne", intervalle: 1 } });
-    const v = await tachesPourAdulte(d, famille, "alex", AUJ, { joursRattrapage: 3 });
+    const v = await tachesPourAdulte(d, famille, "alex", { joursRattrapage: 3 });
     expect(v.aRattraper.map((o) => o.date)).toEqual(["2026-11-08", "2026-11-09", "2026-11-10"]);
-    await expect(tachesPourAdulte(d, famille, "inconnu", AUJ)).rejects.toThrow(/inconnu/);
+    await expect(tachesPourAdulte(d, famille, "inconnu")).rejects.toThrow(/inconnu/);
   });
 });
 
 it("une tâche ponctuelle très ancienne reste à rattraper", async () => {
   const d = nouveau();
   await d.enregistrer("sam", { titre: "Vieille", assigneId: "sam", echeance: "2025-01-15" });
-  expect((await tachesPourAdulte(d, famille, "sam", AUJ)).compte.aRattraper).toBe(1);
-  expect((await tachesPourAdulte(d, famille, "alex", AUJ)).compte.aRattraper).toBe(0);
+  expect((await tachesPourAdulte(d, famille, "sam")).compte.aRattraper).toBe(1);
+  expect((await tachesPourAdulte(d, famille, "alex")).compte.aRattraper).toBe(0);
 });

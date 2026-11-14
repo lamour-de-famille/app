@@ -36,7 +36,7 @@ describe("robustesse des dates et intervalles", () => {
   it("joursRattrapage invalide refusé", async () => {
     const d = nouveau();
     for (const j of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
-      await expect(tachesPourAdulte(d, famille, "alex", AUJ, { joursRattrapage: j })).rejects.toThrow(/joursRattrapage/);
+      await expect(tachesPourAdulte(d, famille, "alex", { joursRattrapage: j })).rejects.toThrow(/joursRattrapage/);
     }
   });
 });
@@ -93,8 +93,8 @@ describe("écritures : pas de fuite du retard", () => {
     const retours = [
       await d.cocher("alex", serieSam.id, AUJ),
       await d.decocher("alex", serieSam.id, AUJ),
-      await d.enregistrer("alex", { id: ponctuelleSam.id, titre: "Assurance", assigneId: "sam", echeance: "2026-11-03" }),
-      await d.enregistrer("alex", { id: serieSam.id, titre: "Devoirs", assigneId: "sam", echeance: "2026-11-02", recurrence: QUOTIDIENNE }),
+      await d.enregistrer("sam", { id: ponctuelleSam.id, titre: "Assurance", assigneId: "sam", echeance: "2026-11-03" }),
+      await d.enregistrer("sam", { id: serieSam.id, titre: "Devoirs", assigneId: "sam", echeance: "2026-11-02", recurrence: QUOTIDIENNE }),
     ];
     for (const r of retours) {
       const txt = JSON.stringify(r);
@@ -154,7 +154,7 @@ describe("symétrie du retard sur des séries quotidiennes", () => {
       // Séries quotidiennes depuis le 2 novembre, jamais cochées : du retard pour chacun.
       await d.enregistrer("alex", { titre: "Série d'Alex", assigneId: "alex", echeance: "2026-11-02", recurrence: QUOTIDIENNE });
       await d.enregistrer("sam", { titre: "Série de Sam", assigneId: "sam", echeance: "2026-11-02", recurrence: QUOTIDIENNE });
-      const v = await tachesPourAdulte(d, famille, demandeur, AUJ);
+      const v = await tachesPourAdulte(d, famille, demandeur);
       const deAutre = (l: typeof v.aujourdhui) => l.filter((o) => o.deLAutre);
       expect(deAutre(v.aujourdhui).map((o) => o.date)).toEqual([AUJ]);
       expect(deAutre(v.cetteSemaine).map((o) => o.date)).toEqual(["2026-11-12", "2026-11-13", "2026-11-14", "2026-11-15"]);

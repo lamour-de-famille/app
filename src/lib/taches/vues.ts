@@ -1,5 +1,5 @@
 import { ErreurDomaine } from "../domaine/depot";
-import type { DateJour, Famille } from "../domaine/types";
+import type { Famille } from "../domaine/types";
 import { ajouterJours, jourIso } from "../regles/dates";
 import type { DepotTaches } from "./depot";
 import { developperOccurrences, occurrenceSansDate } from "./occurrences";
@@ -24,9 +24,9 @@ export async function tachesPourAdulte(
   depot: DepotTaches,
   famille: Famille,
   adulteId: string,
-  aujourdhui: DateJour,
   options: OptionsVueTaches = {},
 ): Promise<VueTaches> {
+  const aujourdhui = depot.aujourdhui(); // horloge du dépôt, jamais un paramètre d'appelant
   if (!famille.adultes.some((a) => a.id === adulteId)) throw new ErreurDomaine(`Adulte inconnu : ${adulteId}`);
   const retardMax = options.joursRattrapage ?? 60;
   if (!Number.isInteger(retardMax) || retardMax < 0) throw new ErreurDomaine("joursRattrapage : entier >= 0");
