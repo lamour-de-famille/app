@@ -3,7 +3,7 @@ import { ErreurDomaine } from "../domaine/depot";
 import type { DepotCarnet } from "./carnet";
 import type { DepotCoches } from "./coches";
 
-/** Contrats communs, exécutés contre chaque implémentation. Adultes fictifs : alex et sam ; intrus : zoe. */
+/** Contrats communs, exécutés contre chaque implémentation. Adultes fictifs : alex et sam ; intrus : intrus. */
 const T1 = { transfertId: "t-1" };
 const JOUR = { date: "2031-05-04" };
 
@@ -53,8 +53,8 @@ export function suiteDepotCarnet(creer: () => Promise<DepotCarnet>) {
 
     it("refuse un inconnu en lecture comme en écriture, et les cibles invalides", async () => {
       const d = await creer();
-      await expect(d.ecrire("zoe", T1, ["x"])).rejects.toThrow(ErreurDomaine);
-      await expect(d.lire("zoe", T1)).rejects.toThrow(ErreurDomaine);
+      await expect(d.ecrire("intrus", T1, ["x"])).rejects.toThrow(ErreurDomaine);
+      await expect(d.lire("intrus", T1)).rejects.toThrow(ErreurDomaine);
       await expect(d.ecrire("alex", { transfertId: "a/b" }, ["x"])).rejects.toThrow(ErreurDomaine);
       await expect(d.ecrire("alex", { date: "2031-02-30" }, ["x"])).rejects.toThrow(ErreurDomaine);
     });
@@ -112,8 +112,8 @@ export function suiteDepotCoches(creer: () => Promise<DepotCoches>) {
 
     it("refuse un inconnu et les identifiants impropres", async () => {
       const d = await creer();
-      await expect(d.definir("zoe", "t-1", "a", true)).rejects.toThrow(ErreurDomaine);
-      await expect(d.lire("zoe", "t-1")).rejects.toThrow(ErreurDomaine);
+      await expect(d.definir("intrus", "t-1", "a", true)).rejects.toThrow(ErreurDomaine);
+      await expect(d.lire("intrus", "t-1")).rejects.toThrow(ErreurDomaine);
       await expect(d.definir("alex", "a/b", "a", true)).rejects.toThrow(ErreurDomaine);
       await expect(d.definir("alex", "t-1", "", true)).rejects.toThrow(ErreurDomaine);
       await expect(d.definir("alex", "t-1", "a/b", true)).rejects.toThrow(ErreurDomaine);
