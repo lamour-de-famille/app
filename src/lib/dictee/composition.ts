@@ -9,7 +9,10 @@ import { modeDemoActif } from "../acces/acces";
 import { ClientGeminiFactice } from "../ia/client-gemini-factice";
 import { configurationIADepuisEnv } from "../ia/configuration";
 import { ClientGeminiPlafonne, PlafondIA, StockageUsageIAMemoire } from "../ia/plafond";
-import { EnvoyeurPushFactice, FileRegroupementMemoire, ServiceNotifications, StockageAbonnementsMemoire, StockageCompteurMemoire } from "../notifications";
+// Imports ciblés (pas le barrel `../notifications`, qui tire l'envoyeur web-push réel dans le build des routes).
+import { EnvoyeurPushFactice } from "../notifications/envoyeur-factice";
+import { ServiceNotifications } from "../notifications/service";
+import { FileRegroupementMemoire, StockageAbonnementsMemoire, StockageCompteurMemoire } from "../notifications/stockages-memoire";
 import { DepotTachesMemoire } from "../taches";
 import { NotesFamilleMemoire } from "./notes";
 import type { DependancesRoutes } from "./routes";
